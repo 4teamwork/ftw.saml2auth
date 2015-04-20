@@ -80,7 +80,7 @@ class Saml2View(BrowserView):
             return ""
         # Do not autosubmit if we already came from the IdP to prevent an
         # endless loop.
-        if self.request.getHeader('Referer', '') == self.plugin.idp_url:
+        if self.request.getHeader('Referer', '').startswith(self.plugin.idp_url):
             return ""
         return """<script type="text/javascript">
         jQuery(function($){$('#login_form_internal input[name="submit"]').click();});
