@@ -44,8 +44,8 @@ https://fs.domain.local/FederationMetadata/2007-06/FederationMetadata.xml
 Links
 =====
 
-- Main project repository: https://github.com/4teamwork/ftw.saml2auth
-- Issue tracker: https://github.com/4teamwork/ftw.saml2auth/issues
+- Github: https://github.com/4teamwork/ftw.saml2auth
+- Issues: https://github.com/4teamwork/ftw.saml2auth/issues
 
 
 Copyright
