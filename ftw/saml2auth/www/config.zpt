@@ -14,28 +14,48 @@
           <td><div class="form-label">IdP URL</div>
           <div class="form-help">e.g. https://adfs.domain.net/adfs/ls/</div>
           </td>
-          <td><input type="text" name="idp_url"
+          <td><input type="text" name="idp_url" size="60"
                      tal:attributes="value context/idp_url"/></td>
         </tr>
         <tr valign="top">
           <td><div class="form-label">SP URL</div>
           <div class="form-help">e.g. https://sp.domain.net/</div>
           </td>
-          <td><input type="text" name="sp_url"
+          <td><input type="text" name="sp_url" size="60"
                      tal:attributes="value context/sp_url"/></td>
         </tr>
         <tr valign="top">
-          <td><div class="form-label">Signing Certificate</div>
+          <td><div class="form-label">SP Key</div>
           <div class="form-help">PEM-Format</div>
           </td>
-          <td><textarea name="signing_cert" cols="65" rows="20"
-                        tal:content="context/signing_cert"></textarea></td>
+          <td><textarea name="sp_key" cols="65" rows="20"
+                        tal:content="context/sp_key"></textarea></td>
+        </tr>
+        <tr valign="top">
+          <td><div class="form-label">SP Certificate</div>
+          <div class="form-help">PEM-Format</div>
+          </td>
+          <td><textarea name="sp_cert" cols="65" rows="20"
+                        tal:content="context/sp_cert"></textarea></td>
+        </tr>
+        <tr>
+          <td align="left" valign="top" class="form-label">
+            <input type="checkbox" name="sign_authnrequests" id="sign-authnrequests"
+                   tal:attributes="checked python: context.sign_authnrequests and 'checked'"/>&nbsp;<label for="sign-authnrequests">Sign Authentication Requests</label>
+          </td>
+        </tr>
+        <tr valign="top">
+          <td><div class="form-label">IdP Certificate</div>
+          <div class="form-help">PEM-Format</div>
+          </td>
+          <td><textarea name="idp_cert" cols="65" rows="20"
+                        tal:content="context/idp_cert"></textarea></td>
         </tr>
         <tr valign="top">
           <td><div class="form-label">IssuerID</div>
           <div class="form-help">e.g. http://adfs.domain.net/adfs/services/trust</div>
           </td>
-          <td><input type="text" name="issuer_id"
+          <td><input type="text" name="issuer_id" size="60"
                      tal:attributes="value context/issuer_id"/></td>
         </tr>
         <tr valign="top">
@@ -49,28 +69,35 @@
           <td><div class="form-label">Roles</div>
           <div class="form-help"></div>
           </td>
-          <td><input type="text" name="roles"
+          <td><input type="text" name="roles" size="60"
                      tal:attributes="value context/roles"/></td>
+        </tr>
+        <tr valign="top">
+          <td><div class="form-label">NameIDPolicy</div>
+          <div class="form-help"></div>
+          </td>
+          <td><input type="text" name="nameid_policy" size="60"
+                     tal:attributes="value context/nameid_policy"/></td>
         </tr>
         <tr valign="top">
           <td><div class="form-label">AuthNContext</div>
           <div class="form-help"></div>
           </td>
-          <td><input type="text" name="authn_context"
+          <td><input type="text" name="authn_context" size="60"
                      tal:attributes="value context/authn_context"/></td>
         </tr>
         <tr valign="top">
           <td><div class="form-label">Internal Network</div>
           <div class="form-help"></div>
           </td>
-          <td><input type="text" name="internal_network"
+          <td><input type="text" name="internal_network" size="60"
                      tal:attributes="value context/internal_network"/></td>
         </tr>
         <tr valign="top">
           <td><div class="form-label">Internal AuthNContext</div>
           <div class="form-help"></div>
           </td>
-          <td><input type="text" name="internal_authn_context"
+          <td><input type="text" name="internal_authn_context" size="60"
                      tal:attributes="value context/internal_authn_context"/></td>
         </tr>
         <tr>

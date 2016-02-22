@@ -34,7 +34,7 @@ class FtwSaml2authLayer(PloneSandboxLayer):
         plugin.idp_url = 'https://fs.domain.local/adfs/ls/'
         plugin.sp_url = 'https://sp.domain.local'
         plugin.issuer_id = 'http://fs.domain.local/adfs/services/trust'
-        plugin.signing_cert = get_data('signing.crt')
+        plugin.idp_cert = get_data('signing.crt')
 
 
 FTW_SAML2AUTH_FIXTURE = FtwSaml2authLayer()

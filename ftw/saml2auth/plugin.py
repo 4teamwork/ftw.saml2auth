@@ -30,6 +30,7 @@ import pytz
 STATUS_SUCCESS = u'urn:oasis:names:tc:SAML:2.0:status:Success'
 AUTHN_CONTEXT = 'urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport'
 INTERNAL_AUTHN_CONTEXT = 'urn:federation:authentication:windows'
+NAMEID_POLICY = 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress'
 
 logger = logging.getLogger('ftw.saml2auth')
 
@@ -83,9 +84,13 @@ class Saml2WebSSOPlugin(BasePlugin):
 
         self.idp_url = None
         self.sp_url = None
-        self.signing_cert = None
+        self.sp_key = None
+        self.sp_cert = None
+        self.sign_authnrequests = False
+        self.idp_cert = None
         self.issuer_id = None
         self.clock_skew = 60
+        self.nameid_policy = NAMEID_POLICY
         self.authn_context = AUTHN_CONTEXT
         self.internal_network = ''
         self.internal_authn_context = INTERNAL_AUTHN_CONTEXT
@@ -223,9 +228,13 @@ class Saml2WebSSOPlugin(BasePlugin):
 
         self.idp_url = REQUEST.form.get('idp_url')
         self.sp_url = REQUEST.form.get('sp_url')
-        self.signing_cert = REQUEST.form.get('signing_cert')
+        self.sp_key = REQUEST.form.get('sp_key')
+        self.sp_cert = REQUEST.form.get('sp_cert')
+        self.idp_cert = REQUEST.form.get('idp_cert')
+        self.sign_authnrequests = bool(REQUEST.form.get('sign_authnrequests', False))
         self.issuer_id = REQUEST.form.get('issuer_id')
         self.clock_skew = int(REQUEST.form.get('clock_skew', 60))
+        self.nameid_policy = REQUEST.form.get('nameid_policy')
         self.authn_context = REQUEST.form.get('authn_context')
         self.internal_network = REQUEST.form.get('internal_network')
         self.internal_authn_context = REQUEST.form.get(
@@ -282,7 +291,7 @@ class Saml2WebSSOPlugin(BasePlugin):
         context = getattr(self, '_v_signature_context', None)
         if purge or context is None:
             context = SignatureContext()
-            key = Key.loadMemory(self.signing_cert, KeyDataFormatCertPem, None)
+            key = Key.loadMemory(self.idp_cert, KeyDataFormatCertPem, None)
             context.add_key(key, self.issuer_id)
             setattr(self, '_v_signature_context', context)
         return context
