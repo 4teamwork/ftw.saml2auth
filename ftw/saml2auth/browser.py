@@ -4,14 +4,11 @@ from Products.CMFCore.utils import getToolByName
 from Products.Five import BrowserView
 from Products.PluggableAuthService.interfaces.plugins import IExtractionPlugin
 from base64 import b64encode
-from dm.xmlsec.binding.tmpl import Signature
-from ftw.saml2auth.config import NSMAP, NS_DS
 from lxml.etree import fromstring, tostring, XMLParser, XML
 from netaddr import AddrFormatError
 from netaddr import IPAddress
 from netaddr import IPSet
 from tempfile import NamedTemporaryFile
-from xml.dom.minidom import parseString
 
 import dm.xmlsec.binding as xmlsec
 import uuid
@@ -53,26 +50,20 @@ class Saml2View(BrowserView):
         if self.is_internal_request:
             authn_context = self.plugin.internal_authn_context
 
-        req = """
-        <samlp:AuthnRequest xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
-                            xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
-                            Version="2.0" ProtocolBinding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
-                            ID="_%(id_)s"
-                            AssertionConsumerServiceURL="%(acs_url)s"
-                            IssueInstant="%(issue_instant)s">
-          <saml:Issuer>%(issuer)s</saml:Issuer>
-          <samlp:NameIDPolicy Format="%(nameid_policy)s"/>
-          <samlp:RequestedAuthnContext Comparison="exact">
-            <saml:AuthnContextClassRef>%(authn_context)s</saml:AuthnContextClassRef>
-          </samlp:RequestedAuthnContext>
-        </samlp:AuthnRequest>
-        """ % dict(
-            id_=uuid.uuid4(),
+        id_ = uuid.uuid4()
+
+        signature = ''
+        if self.plugin.sign_authnrequests:
+            signature = SIGNATURE_TMPL % dict(id_=id_)
+
+        req = AUTHNREQ_TMPL % dict(
+            id_=id_,
             issuer=self.plugin.sp_url,
             acs_url=self.request.form.get('came_from') or context.absolute_url(),
             issue_instant=DateTime().HTML4(),
             authn_context=authn_context,
             nameid_policy=self.plugin.nameid_policy,
+            signature=signature,
         )
 
         # Remove whitespaces
@@ -85,17 +76,9 @@ class Saml2View(BrowserView):
         return b64encode(req)
 
     def sign(self, xml):
-        elem = fromstring(xml)
-        signature = Signature(xmlsec.TransformExclC14N, xmlsec.TransformRsaSha1)
-        issuer = elem.xpath('//saml:Issuer', namespaces=NSMAP)[0]
-        issuer.addnext(signature)
-
-        ref = signature.addReference(xmlsec.TransformSha1)
-        ref.addTransform(xmlsec.TransformEnveloped)
-        ref.addTransform(xmlsec.TransformExclC14N)
-
-        key_info = signature.ensureKeyInfo()
-        key_info.addX509Data()
+        doc = fromstring(xml)
+        xmlsec.addIDs(doc, ["ID"])
+        signature = xmlsec.findNode(doc, xmlsec.dsig("Signature"))
 
         dsig_ctx = xmlsec.DSigCtx()
         sign_key = xmlsec.Key.loadMemory(
@@ -110,19 +93,7 @@ class Saml2View(BrowserView):
         dsig_ctx.signKey = sign_key
         dsig_ctx.sign(signature)
 
-        newdoc = parseString(tostring(elem))
-        signature_nodes = newdoc.getElementsByTagName("Signature")
-        for signature in signature_nodes:
-            signature.removeAttribute('xmlns')
-            signature.setAttribute('xmlns:ds', NS_DS)
-            if not signature.tagName.startswith('ds:'):
-                signature.tagName = 'ds:' + signature.tagName
-            nodes = signature.getElementsByTagName("*")
-            for node in nodes:
-                if not node.tagName.startswith('ds:'):
-                    node.tagName = 'ds:' + node.tagName
-
-        return newdoc.saveXML(newdoc.firstChild)
+        return tostring(doc)
 
     def post_action(self):
         if self.plugin is None:
@@ -142,3 +113,42 @@ class Saml2View(BrowserView):
         jQuery(function($){$('#login_form_internal input[name="submit"]').click();});
         </script>
         """
+
+
+AUTHNREQ_TMPL = """<samlp:AuthnRequest xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
+                                       xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
+                                       AssertionConsumerServiceURL="%(acs_url)s"
+                                       ID="_%(id_)s"
+                                       IssueInstant="%(issue_instant)s"
+                                       ProtocolBinding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+                                       Version="2.0">
+    <saml:Issuer>%(issuer)s</saml:Issuer>
+    %(signature)s
+    <samlp:NameIDPolicy Format="%(nameid_policy)s"/>
+    <samlp:RequestedAuthnContext Comparison="exact">
+        <saml:AuthnContextClassRef>%(authn_context)s</saml:AuthnContextClassRef>
+    </samlp:RequestedAuthnContext>
+</samlp:AuthnRequest>"""
+
+SIGNATURE_TMPL = """<ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+        <ds:SignedInfo>
+            <ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/>
+            <ds:SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>
+            <ds:Reference URI="#_%(id_)s">
+                <ds:Transforms>
+                    <ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" />
+                    <ds:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/>
+                </ds:Transforms>
+                <ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
+                <ds:DigestValue></ds:DigestValue>
+            </ds:Reference>
+        </ds:SignedInfo>
+        <ds:SignatureValue></ds:SignatureValue>
+        <ds:KeyInfo>
+            <ds:X509Data >
+                <ds:X509SubjectName/>
+                <ds:X509IssuerSerial/>
+                <ds:X509Certificate/>
+            </ds:X509Data>
+        </ds:KeyInfo>
+    </ds:Signature>"""
