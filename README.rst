@@ -41,6 +41,22 @@ Identity Provider Metadata can be downloaded from the url:
 https://fs.domain.local/FederationMetadata/2007-06/FederationMetadata.xml
 
 
+xmlsec1 Examples
+----------------
+
+Sign AuthnRequest
+
+xmlsec1 --sign --output signed.xml --pkcs12 sp.pfx --pwd sp --id-attr:ID urn:oasis:names:tc:SAML:2.0:protocol:AuthnRequest req_tmpl.xml
+
+Verify AuthnRequest
+
+xmlsec1 --verify --trusted-pem sp.crt --id-attr:ID urn:oasis:names:tc:SAML:2.0:protocol:AuthnRequest signed.xml
+
+Verify Assertion
+
+xmlsec1 --verify --trusted-pem idp.crt --id-attr:ID urn:oasis:names:tc:SAML:2.0:assertion:Assertion resp.xml
+
+
 Links
 =====
 
