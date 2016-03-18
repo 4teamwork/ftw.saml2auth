@@ -60,6 +60,7 @@ class Saml2View(BrowserView):
             id_=id_,
             issuer=self.plugin.sp_url,
             acs_url=self.request.form.get('came_from') or context.absolute_url(),
+            destination=self.plugin.idp_url,
             issue_instant=DateTime().HTML4(),
             authn_context=authn_context,
             nameid_policy=self.plugin.nameid_policy,
@@ -118,6 +119,7 @@ class Saml2View(BrowserView):
 AUTHNREQ_TMPL = """<samlp:AuthnRequest xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
                                        xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
                                        AssertionConsumerServiceURL="%(acs_url)s"
+                                       Destination="%(destination)s"
                                        ID="_%(id_)s"
                                        IssueInstant="%(issue_instant)s"
                                        ProtocolBinding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
@@ -133,7 +135,7 @@ AUTHNREQ_TMPL = """<samlp:AuthnRequest xmlns:saml="urn:oasis:names:tc:SAML:2.0:a
 SIGNATURE_TMPL = """<ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
         <ds:SignedInfo>
             <ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/>
-            <ds:SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>
+            <ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/>
             <ds:Reference URI="#_%(id_)s">
                 <ds:Transforms>
                     <ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" />
@@ -146,8 +148,6 @@ SIGNATURE_TMPL = """<ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
         <ds:SignatureValue></ds:SignatureValue>
         <ds:KeyInfo>
             <ds:X509Data >
-                <ds:X509SubjectName/>
-                <ds:X509IssuerSerial/>
                 <ds:X509Certificate/>
             </ds:X509Data>
         </ds:KeyInfo>
