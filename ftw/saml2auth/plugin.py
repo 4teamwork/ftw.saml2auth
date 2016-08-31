@@ -302,7 +302,9 @@ class Saml2WebSSOPlugin(BasePlugin):
             for attr in astmt.Attribute:
                 key = attr.Name.encode('utf8')
                 value = xs_convert_from_xml(
-                    attr.AttributeValue, ty='string').encode('utf8')
+                    attr.AttributeValue, ty='string')
+                if value:
+                    value = value.encode('utf8')
                 attrs[key] = value
         return attrs
 
