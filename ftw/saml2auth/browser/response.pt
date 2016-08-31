@@ -1,0 +1,19 @@
+<samlp:Response xmlns:tal="http://xml.zope.org/namespaces/tal"
+                xmlns:metal="http://xml.zope.org/namespaces/metal"
+                xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
+                xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
+                ID="_ddf30d86-71a0-4721-af1d-de0d8d4480be"
+                Version="2.0"
+                IssueInstant="2014-07-17T01:01:48Z"
+                Destination="http://sp.example.com/demo1/index.php?acs"
+                InResponseTo="_e64d2a59-b2e1-4b6e-ad44-d3b8a386f318"
+                tal:attributes="ID options/id;
+                                IssueInstant options/issue_instant;
+                                Destination options/destination;
+                                InResponseTo options/in_response_to">
+  <saml:Issuer tal:content="options/issuer">http://idp.example.com/metadata.php</saml:Issuer>
+  <samlp:Status>
+    <samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"
+                      tal:attributes="Value options/status_code"/>
+  </samlp:Status>
+</samlp:Response>
