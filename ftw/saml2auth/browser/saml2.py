@@ -22,6 +22,9 @@ from dm.saml2.pyxb import protocol as samlp
 from dm.saml2.pyxb import assertion as saml
 from Products.Five.browser.pagetemplatefile import ViewPageTemplateFile
 from pyxb.utils.domutils import BindingDOMSupport
+from plone.registry.interfaces import IRegistry
+from ftw.saml2auth.interfaces import IIdentityProviderSettings
+from zope.component import queryUtility
 
 import base64
 import dm.xmlsec.binding as xmlsec
@@ -67,6 +70,9 @@ class Saml2View(BrowserView):
         #     self.is_internal_request = ip in ipset
 
     def publishTraverse(self, request, name):
+        # URL routing for SAML2 endpoints
+        # /saml2/idp/sso -> SAML2 Response 
+        # /saml2/sp/sso -> 
         if self.party is None:
             if name in {'idp', 'sp'}:
                 self.party = name
@@ -91,6 +97,11 @@ class Saml2View(BrowserView):
         mtool = getToolByName(self.context, 'portal_membership')
         if mtool.isAnonymousUser():
             raise Unauthorized()
+
+        member = mtool.getAuthenticatedMember()
+
+        registry = queryUtility(IRegistry)
+        settings = registry.forInterface(IIdentityProviderSettings)
 
         # if 'SAMLRequest' not in self.request.form:
         #     raise BadRequest('Missing SAMLRequest')
@@ -129,8 +140,8 @@ class Saml2View(BrowserView):
 
         assertion.Subject = saml.Subject()
         assertion.Subject.NameID = saml.NameID(
-            u'jim@domain.local',
-            Format=u'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress')
+            member.getProperty(settings.nameid_property).decode('utf8'),
+            Format=settings.nameid_format)
         assertion.Subject.SubjectConfirmation = [saml.SubjectConfirmation(
             saml.SubjectConfirmationData(
                 InResponseTo=in_response_to,
