@@ -24,15 +24,30 @@ from Products.Five.browser.pagetemplatefile import ViewPageTemplateFile
 from pyxb.utils.domutils import BindingDOMSupport
 from plone.registry.interfaces import IRegistry
 from ftw.saml2auth.interfaces import IIdentityProviderSettings
+from ftw.saml2auth.interfaces import IServiceProviderSettings
 from zope.component import queryUtility
+from pyxb.bundles.wssplat import ds
 
 import base64
 import dm.xmlsec.binding as xmlsec
 import uuid
+import zlib
 
 BindingDOMSupport.DeclareNamespace(samlp.Namespace, 'samlp')
 BindingDOMSupport.DeclareNamespace(saml.Namespace, 'saml')
+BindingDOMSupport.DeclareNamespace(ds.Namespace, 'ds')
 
+
+def quote(s):
+    return s.replace('%', '%25').replace('&', '%26')
+
+
+def unquote(s):
+    return s.replace('%26', '&').replace('%25', '%')
+
+
+def create_authnrequest_cookie(authn_request, relay_state):
+    value = '%s&%s' % (quote(authn_request), quote(relay_state))
 
 class Saml2View(BrowserView):
     """Endpoints for SAML 2.0 Web SSO"""
@@ -47,6 +62,7 @@ class Saml2View(BrowserView):
         super(Saml2View, self).__init__(context, request)
         self.party = None
         self.service = None
+        self.mtool = getToolByName(self.context, 'portal_membership')
         # self.plugin = None
 
         # acl_users = getToolByName(self, "acl_users")
@@ -71,8 +87,8 @@ class Saml2View(BrowserView):
 
     def publishTraverse(self, request, name):
         # URL routing for SAML2 endpoints
-        # /saml2/idp/sso -> SAML2 Response 
-        # /saml2/sp/sso -> 
+        # /saml2/idp/sso -> SAML2 Response
+        # /saml2/sp/sso ->
         if self.party is None:
             if name in {'idp', 'sp'}:
                 self.party = name
@@ -93,43 +109,63 @@ class Saml2View(BrowserView):
         elif self.party == 'sp':
             return self.process_saml_response()
 
-    def process_saml_request(self):
-        mtool = getToolByName(self.context, 'portal_membership')
-        if mtool.isAnonymousUser():
+    def extract_authn_request(self):
+        """Extract AuthNRequest and RelayState from the HTTP request."""
+        authn_request = None
+        relay_state = ''
+        if 'SAMLRequest' in self.request.form:
+            try:
+                authn_request = base64.b64decode(
+                    self.request.form['SAMLRequest'])
+            except TypeError:
+                raise BadRequest()
+            if 'RelayState' in self.request.form:
+                relay_state = self.request.form['RelayState']
+
+        if self.mtool.isAnonymousUser():
+            if authn_request is None:
+                raise BadRequest()
+
+            # Store AuthNRequest in a cookie
+            cookie_value = base64.b64encode(zlib.compress(
+                '&'.join(quote(authn_request), quote(relay_state))))
+            self.request.response.setCookie('_ftwsaml2auth', cookie_value, path='/')
+            self.request.response.redirect(self.context.absolute_url())
             raise Unauthorized()
 
-        member = mtool.getAuthenticatedMember()
+        # Get AuthNRequest from cookie
+        if authn_request is None:
+            if '_ftwsam2auth' not in self.request.cookies:
+                raise BadRequest()
+            try:
+                values = zlib.uncompress(base64.b64decode(
+                    self.request.cookies['_ftwsaml2auth'])).split('&')
+            except (zlib.error, TypeError):
+                raise BadRequest()
+            authn_request = unquote(values[0])
+            if len(values) > 1:
+                relay_state = unquote(values[1])
 
+        req = CreateFromDocument(authn_request)
+        return (req, relay_state)
+
+    def process_saml_request(self):
+        """Process a SAMLRequest and return SAMLResponse."""
+        req, relay_state = self.extract_authn_request()
+
+        member = self.mtool.getAuthenticatedMember()
         registry = queryUtility(IRegistry)
         settings = registry.forInterface(IIdentityProviderSettings)
 
-        # if 'SAMLRequest' not in self.request.form:
-        #     raise BadRequest('Missing SAMLRequest')
-
-        # doc = self.request.form['SAMLRequest']
-        # try:
-        #     doc = base64.b64decode(doc)
-        # except TypeError:
-        #     raise BadRequest()
-
-        # try:
-        #     req = CreateFromDocument(
-        #         doc,
-        #         suppress_verification=True,
-        #         # context=self._signature_context(),
-        #     )
-        # except VerifyError, e:
-        #     raise BadRequest('Signature verification error: %s' % str(e))
-
-        # create_response()
-        in_response_to = u'_' + unicode(uuid.uuid4())
-        now = DateTime()
-        issuer_id = unicode(self.context.absolute_url())
+        # TODO: check if req is allowed
 
         # Construct a SAML Response
         resp = Response(
-            InResponseTo=in_response_to,
+            InResponseTo=req.ID,
         )
+
+        now = DateTime()
+        issuer_id = unicode(self.context.absolute_url())
 
         resp.Issuer = saml.Issuer(issuer_id)
         resp.Status = samlp.Status(samlp.StatusCode(
@@ -144,7 +180,7 @@ class Saml2View(BrowserView):
             Format=settings.nameid_format)
         assertion.Subject.SubjectConfirmation = [saml.SubjectConfirmation(
             saml.SubjectConfirmationData(
-                InResponseTo=in_response_to,
+                InResponseTo=req.ID,
                 NotOnOrAfter=(now + 1.0/24).HTML4(),
                 Recipient=u'https://sp.example.com/test',
             ),
@@ -180,6 +216,13 @@ class Saml2View(BrowserView):
 
         resp.Assertion = [assertion]
 
+        sign_context = SignatureContext()
+        key = xmlsec.Key.loadMemory(
+            settings.idp_signing_key, xmlsec.KeyDataFormatPem, None)
+        sign_context.add_key(key, issuer_id)
+
+        assertion.request_signature(context=sign_context)
+
         self.request.response.setHeader('Content-Type', 'text/xml')
         return resp.toxml()
 
@@ -193,39 +236,39 @@ class Saml2View(BrowserView):
         print "Process SAML 2 repsonse"
 
     def authn_request(self):
-        context = aq_inner(self.context)
-        if self.plugin is None:
-            return ''
+        """Build an AuthNRequest."""
+        registry = queryUtility(IRegistry)
+        settings = registry.forInterface(IServiceProviderSettings)
 
-        authn_context = self.plugin.authn_context
-        if self.is_internal_request:
-            authn_context = self.plugin.internal_authn_context
+        portal = getToolByName(self.context, 'portal_url').getPortalObject()
+        acs_url = u'%s/saml2/sp/sso' % portal.absolute_url().decode('utf8')
 
-        id_ = uuid.uuid4()
-
-        signature = ''
-        if self.plugin.sign_authnrequests:
-            signature = SIGNATURE_TMPL % dict(id_=id_)
-
-        req = AUTHNREQ_TMPL % dict(
-            id_=id_,
-            issuer=self.plugin.sp_url,
-            acs_url=self.request.form.get('came_from') or context.absolute_url(),
-            destination=self.plugin.idp_url,
-            issue_instant=DateTime().HTML4(),
-            authn_context=authn_context,
-            nameid_policy=self.plugin.nameid_policy,
-            signature=signature,
+        req = samlp.AuthnRequest(
+            Destination=settings.idp_url,
+            ProtocolBinding=u'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST',
+            AssertionConsumerServiceURL=acs_url
         )
+        req.Issuer = saml.Issuer(settings.issuer_id)
+        req.NameIDPolicy = samlp.NameIDPolicy(
+            Format=settings.nameid_format,
+        )
+        req.RequestedAuthnContext = samlp.RequestedAuthnContext(
+            saml.AuthnContextClassRef(settings.authn_context),
+            Comparison="exact")
 
-        # Remove whitespaces
-        parser = XMLParser(remove_blank_text=True)
-        req = tostring(XML(req, parser=parser))
+        if settings.sign_authnrequest:
+            sign_context = SignatureContext()
+            key = xmlsec.Key.loadMemory(
+                settings.signing_key, xmlsec.KeyDataFormatPem, None)
+            sign_context.add_key(key, settings.issuer_id)
+            req.request_signature(context=sign_context)
 
-        if self.plugin.sign_authnrequests:
-            req = self.sign(req)
+        return req.toxml()
 
-        return b64encode(req)
+    def saml2_response(self):
+        """Build a SAML2 response."""
+
+
 
     def sign(self, xml):
         doc = fromstring(xml)

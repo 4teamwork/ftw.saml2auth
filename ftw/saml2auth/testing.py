@@ -1,6 +1,7 @@
 from plone.app.testing import PloneSandboxLayer
 from plone.app.testing import PLONE_FIXTURE
 from plone.app.testing import IntegrationTesting, FunctionalTesting
+from plone.app.testing import applyProfile
 from plone.testing import z2
 from zope.configuration import xmlconfig
 from ftw.saml2auth.plugin import Saml2WebSSOPlugin
@@ -20,6 +21,8 @@ class FtwSaml2authLayer(PloneSandboxLayer):
         z2.installProduct(app, 'ftw.saml2auth')
 
     def setUpPloneSite(self, portal):
+        applyProfile(portal, 'ftw.saml2auth:default')
+
         # Setup PAS plugin
         uf = portal.acl_users
         plugin = Saml2WebSSOPlugin('saml2_websso')
