@@ -29,14 +29,20 @@ nameid_formats = SimpleVocabulary([
 
 class IServiceProviderSettings(Interface):
 
+    idp_issuer_id = schema.TextLine(
+        title=u'IdP Issuer Id',
+        description=u'Identifier of the IdP which will issue SAML assertions',
+        default=u'',
+    )
+
     idp_url = schema.TextLine(
         title=u'IdP URL',
         description=u'URL of the IdP endpoint where AuthnRequests are send to.',
         default=u'',
     )
 
-    issuer_id = schema.TextLine(
-        title=u'Issuer ID',
+    sp_issuer_id = schema.TextLine(
+        title=u'SP Issuer ID',
         description=u'Unique identifier of the service provider',
         default=u'',
     )
@@ -60,13 +66,26 @@ class IServiceProviderSettings(Interface):
     )
 
     signing_key = schema.Text(
-        title=u'Siging Key',
-        description=u'',
+        title=u'Signing Key',
+        description=u'The private key used for signing AuthNRequests',
     )
 
     signing_cert = schema.Text(
         title=u'Signing Certificate',
-        description=u'',
+        description=u'The certificate for verifying signatures in '
+                    'AuthNRequests',
+    )
+
+    idp_cert = schema.Text(
+        title=u'IdP Certificate',
+        description=u'The certificate of the IdP to verify signatures in SAML '
+                    'assertions.',
+    )
+
+    max_clock_skew = schema.Int(
+        title=u'Max. Clock Skew',
+        description=u'The maximum acceptable clock skew in seconds.',
+        default=60,
     )
 
 
@@ -84,7 +103,6 @@ class IIdentityProviderSettings(Interface):
         vocabulary=nameid_formats,
         default=u'urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified',
     )
-
 
     idp_signing_key = schema.Text(
         title=u'IdP Siging Key',

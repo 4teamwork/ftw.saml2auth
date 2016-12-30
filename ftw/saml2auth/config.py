@@ -15,3 +15,5 @@ NSMAP = {
     'ds': NS_DS,
     'xenc': NS_XENC
 }
+
+STATUS_SUCCESS = u'urn:oasis:names:tc:SAML:2.0:status:Success'

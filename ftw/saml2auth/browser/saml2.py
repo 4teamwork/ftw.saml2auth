@@ -27,15 +27,26 @@ from ftw.saml2auth.interfaces import IIdentityProviderSettings
 from ftw.saml2auth.interfaces import IServiceProviderSettings
 from zope.component import queryUtility
 from pyxb.bundles.wssplat import ds
+from ftw.saml2auth.config import STATUS_SUCCESS
+from datetime import datetime, timedelta
+from dm.saml2.util import xs_convert_from_xml
+from zope.component import getMultiAdapter
+from pyxb import BadDocumentError
 
 import base64
 import dm.xmlsec.binding as xmlsec
 import uuid
 import zlib
+import logging
+import pytz
+
+COOKIE_NAME = '_ftwsaml2auth'
 
 BindingDOMSupport.DeclareNamespace(samlp.Namespace, 'samlp')
 BindingDOMSupport.DeclareNamespace(saml.Namespace, 'saml')
 BindingDOMSupport.DeclareNamespace(ds.Namespace, 'ds')
+
+logger = logging.getLogger('ftw.saml2auth')
 
 
 def quote(s):
@@ -46,8 +57,19 @@ def unquote(s):
     return s.replace('%26', '&').replace('%25', '%')
 
 
-def create_authnrequest_cookie(authn_request, relay_state):
-    value = '%s&%s' % (quote(authn_request), quote(relay_state))
+def extract_attributes(assertion):
+    """Return a dict of the attributes in the given assertion."""
+    attrs = {}
+    for astmt in assertion.AttributeStatement:
+        for attr in astmt.Attribute:
+            key = attr.Name.encode('utf8')
+            value = xs_convert_from_xml(
+                attr.AttributeValue, ty='string')
+            if value:
+                value = value.encode('utf8')
+            attrs[key] = value
+    return attrs
+
 
 class Saml2View(BrowserView):
     """Endpoints for SAML 2.0 Web SSO"""
@@ -87,8 +109,8 @@ class Saml2View(BrowserView):
 
     def publishTraverse(self, request, name):
         # URL routing for SAML2 endpoints
-        # /saml2/idp/sso -> SAML2 Response
-        # /saml2/sp/sso ->
+        # /saml2/idp/sso -> Process AuthNRequest and issue SAMLResponse
+        # /saml2/sp/sso -> Process SAMLResponse and authenticate user
         if self.party is None:
             if name in {'idp', 'sp'}:
                 self.party = name
@@ -110,7 +132,8 @@ class Saml2View(BrowserView):
             return self.process_saml_response()
 
     def extract_authn_request(self):
-        """Extract AuthNRequest and RelayState from the HTTP request."""
+        """Extract AuthNRequest and RelayState from the HTTP request or cookie.
+        """
         authn_request = None
         relay_state = ''
         if 'SAMLRequest' in self.request.form:
@@ -128,18 +151,18 @@ class Saml2View(BrowserView):
 
             # Store AuthNRequest in a cookie
             cookie_value = base64.b64encode(zlib.compress(
-                '&'.join(quote(authn_request), quote(relay_state))))
-            self.request.response.setCookie('_ftwsaml2auth', cookie_value, path='/')
+                '&'.join([quote(authn_request), quote(relay_state)])))
+            self.request.response.setCookie(COOKIE_NAME, cookie_value, path='/')
             self.request.response.redirect(self.context.absolute_url())
             raise Unauthorized()
 
         # Get AuthNRequest from cookie
         if authn_request is None:
-            if '_ftwsam2auth' not in self.request.cookies:
+            if COOKIE_NAME not in self.request.cookies:
                 raise BadRequest()
             try:
-                values = zlib.uncompress(base64.b64decode(
-                    self.request.cookies['_ftwsaml2auth'])).split('&')
+                values = zlib.decompress(base64.b64decode(
+                    self.request.cookies[COOKIE_NAME])).split('&')
             except (zlib.error, TypeError):
                 raise BadRequest()
             authn_request = unquote(values[0])
@@ -149,15 +172,10 @@ class Saml2View(BrowserView):
         req = CreateFromDocument(authn_request)
         return (req, relay_state)
 
-    def process_saml_request(self):
-        """Process a SAMLRequest and return SAMLResponse."""
-        req, relay_state = self.extract_authn_request()
-
+    def create_saml_response(self, req):
         member = self.mtool.getAuthenticatedMember()
         registry = queryUtility(IRegistry)
         settings = registry.forInterface(IIdentityProviderSettings)
-
-        # TODO: check if req is allowed
 
         # Construct a SAML Response
         resp = Response(
@@ -216,13 +234,22 @@ class Saml2View(BrowserView):
 
         resp.Assertion = [assertion]
 
+        # Sign assertion
         sign_context = SignatureContext()
         key = xmlsec.Key.loadMemory(
             settings.idp_signing_key, xmlsec.KeyDataFormatPem, None)
         sign_context.add_key(key, issuer_id)
-
         assertion.request_signature(context=sign_context)
 
+        return resp
+
+    def process_saml_request(self):
+        """Process a SAMLRequest and return SAMLResponse."""
+        req, relay_state = self.extract_authn_request()
+
+        # TODO: check if req is allowed
+
+        resp = self.create_saml_response(req)
         self.request.response.setHeader('Content-Type', 'text/xml')
         return resp.toxml()
 
@@ -233,7 +260,72 @@ class Saml2View(BrowserView):
         )
 
     def process_saml_response(self):
-        print "Process SAML 2 repsonse"
+        """Extract the SAML response from the request and authenticate the
+           user.
+        """
+        if 'SAMLResponse' not in self.request.form:
+            raise BadRequest('Missing SAMLResponse')
+
+        doc = self.request.form['SAMLResponse']
+        try:
+            doc = base64.b64decode(doc)
+        except TypeError:
+            raise BadRequest('Undecodable SAMLResponse')
+
+        settings = self.sp_settings()
+        sign_context = SignatureContext()
+        key = xmlsec.Key.loadMemory(
+            settings.idp_cert, xmlsec.KeyDataFormatCertPem, None)
+        sign_context.add_key(key, settings.idp_issuer_id)
+        try:
+            resp = CreateFromDocument(doc, context=sign_context)
+        except BadDocumentError, e:
+            raise BadRequest('Invalid SAMLResponse')
+        except VerifyError, e:
+            logger.warning('Signature verification error: %s' % str(e))
+            raise BadRequest('Invalid Signature')
+
+        # Verify destination of SAML response
+        portal_state = getMultiAdapter(
+            (self.context, self.request), name=u'plone_portal_state')
+        sp_url = '{}/saml2/sp/sso'.format(portal_state.portal_url())
+        if resp.Destination != sp_url:
+            logger.warning('Wrong destination in SAML response. Got %s, '
+                           'expected %s' % (resp.Destination, sp_url))
+            raise BadRequest('Wrong destination')
+
+        status = resp.Status.StatusCode.Value
+        if status != STATUS_SUCCESS:
+            # Status code may contain a second-level status code.
+            if resp.Status.StatusCode.StatusCode:
+                status += ': ' + resp.Status.StatusCode.StatusCode.Value
+
+            logger.warning('Failed SAML2 request with status code: %s.'
+                           % status)
+            raise Unauthorized()
+
+        # Verfiy issue time of response.
+        now = datetime.utcnow()
+        issue_instant = resp.IssueInstant.astimezone(
+            tz=pytz.utc).replace(tzinfo=None)
+        delta = timedelta(seconds=settings.max_clock_skew)
+        if (now + delta) < issue_instant or (now - delta) > issue_instant:
+            logger.warning('Clock skew too great.')
+            raise Unauthorized()
+
+        # We expect the subject and attributes in the first assertion
+        if len(resp.Assertion) > 0:
+            assertion = resp.Assertion[0]
+            if not assertion.verified_signature():
+                raise BadRequest('Unsigned Assertion')
+            subject = assertion.Subject.NameID.value().encode('utf8')
+            attributes = extract_attributes(assertion)
+            return "subject: %s; attributes: %s" % (subject, attributes)
+            #self._logins.insert(subject)
+        else:
+            logger.warning('Missing assertion')
+            raise Unauthorized()
+        return "Process SAML 2 repsonse"
 
     def authn_request(self):
         """Build an AuthNRequest."""
@@ -248,7 +340,7 @@ class Saml2View(BrowserView):
             ProtocolBinding=u'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST',
             AssertionConsumerServiceURL=acs_url
         )
-        req.Issuer = saml.Issuer(settings.issuer_id)
+        req.Issuer = saml.Issuer(settings.sp_issuer_id)
         req.NameIDPolicy = samlp.NameIDPolicy(
             Format=settings.nameid_format,
         )
@@ -260,89 +352,14 @@ class Saml2View(BrowserView):
             sign_context = SignatureContext()
             key = xmlsec.Key.loadMemory(
                 settings.signing_key, xmlsec.KeyDataFormatPem, None)
-            sign_context.add_key(key, settings.issuer_id)
+            sign_context.add_key(key, settings.sp_issuer_id)
             req.request_signature(context=sign_context)
 
         return req.toxml()
 
+    def sp_settings(self):
+        registry = queryUtility(IRegistry)
+        return registry.forInterface(IServiceProviderSettings)
+
     def saml2_response(self):
         """Build a SAML2 response."""
-
-
-
-    def sign(self, xml):
-        doc = fromstring(xml)
-        xmlsec.addIDs(doc, ["ID"])
-        signature = xmlsec.findNode(doc, xmlsec.dsig("Signature"))
-
-        dsig_ctx = xmlsec.DSigCtx()
-        sign_key = xmlsec.Key.loadMemory(
-            self.plugin.sp_key, xmlsec.KeyDataFormatPem, None)
-
-        cert_file = NamedTemporaryFile(delete=True)
-        cert_file.file.write(self.plugin.sp_cert)
-        cert_file.file.flush()
-        sign_key.loadCert(cert_file.name, xmlsec.KeyDataFormatCertPem)
-        cert_file.close()
-
-        dsig_ctx.signKey = sign_key
-        dsig_ctx.sign(signature)
-
-        return tostring(doc)
-
-    def post_action(self):
-        if self.plugin is None:
-            return ''
-        return self.plugin.idp_url
-
-    def auto_submit(self):
-        if self.request.get('URL', '').endswith('/logged_out'):
-            return ""
-        if not self.is_internal_request:
-            return ""
-        # Do not autosubmit if we already came from the IdP to prevent an
-        # endless loop.
-        if self.request.getHeader('Referer', '').startswith(self.plugin.idp_url):
-            return ""
-        return """<script type="text/javascript">
-        jQuery(function($){$('#login_form_internal input[name="submit"]').click();});
-        </script>
-        """
-
-
-AUTHNREQ_TMPL = """<samlp:AuthnRequest xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
-                                       xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
-                                       AssertionConsumerServiceURL="%(acs_url)s"
-                                       Destination="%(destination)s"
-                                       ID="_%(id_)s"
-                                       IssueInstant="%(issue_instant)s"
-                                       ProtocolBinding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
-                                       Version="2.0">
-    <saml:Issuer>%(issuer)s</saml:Issuer>
-    %(signature)s
-    <samlp:NameIDPolicy Format="%(nameid_policy)s"/>
-    <samlp:RequestedAuthnContext Comparison="exact">
-        <saml:AuthnContextClassRef>%(authn_context)s</saml:AuthnContextClassRef>
-    </samlp:RequestedAuthnContext>
-</samlp:AuthnRequest>"""
-
-SIGNATURE_TMPL = """<ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
-        <ds:SignedInfo>
-            <ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/>
-            <ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/>
-            <ds:Reference URI="#_%(id_)s">
-                <ds:Transforms>
-                    <ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" />
-                    <ds:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/>
-                </ds:Transforms>
-                <ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
-                <ds:DigestValue></ds:DigestValue>
-            </ds:Reference>
-        </ds:SignedInfo>
-        <ds:SignatureValue></ds:SignatureValue>
-        <ds:KeyInfo>
-            <ds:X509Data >
-                <ds:X509Certificate/>
-            </ds:X509Data>
-        </ds:KeyInfo>
-    </ds:Signature>"""

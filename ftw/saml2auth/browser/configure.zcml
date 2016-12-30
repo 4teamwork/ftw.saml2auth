@@ -10,5 +10,12 @@
     class=".saml2.Saml2View"
     permission="zope.Public"
     />
-  
+
+  <browser:viewlet  
+      name="ftw.saml2auth.sso" 
+      manager="plone.app.layout.viewlets.interfaces.IHtmlHead"
+      class=".viewlets.SAML2SSOAutoSubmitViewlet"
+      permission="zope2.View" 
+      />
+
 </configure>
