@@ -16,6 +16,9 @@ class SAML2SSOAutoSubmitViewlet(ViewletBase):
         registry = queryUtility(IRegistry)
         settings = registry.forInterface(IServiceProviderSettings)
 
+        if not settings.enabled:
+            return ''
+
         if self.request.getHeader('HTTP_REFERER') == settings.idp_url:
             return ''
 

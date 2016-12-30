@@ -29,6 +29,12 @@ nameid_formats = SimpleVocabulary([
 
 class IServiceProviderSettings(Interface):
 
+    enabled = schema.Bool(
+        title=u'Enable',
+        description=u'Enables SAML 2.0 Service Provider role for this Plone site',
+        default=False,
+    )
+
     idp_issuer_id = schema.TextLine(
         title=u'IdP Issuer Id',
         description=u'Identifier of the IdP which will issue SAML assertions',
