@@ -1,0 +1,3 @@
+
+class SAMLResponseError(Exception):
+    pass

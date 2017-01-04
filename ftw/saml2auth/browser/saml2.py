@@ -14,6 +14,7 @@ from dm.saml2.pyxb.protocol import Response
 from dm.saml2.signature import SignatureContext, VerifyError
 from dm.saml2.util import xs_convert_from_xml
 from ftw.saml2auth.config import STATUS_SUCCESS
+from ftw.saml2auth.errors import SAMLResponseError
 from ftw.saml2auth.interfaces import IAuthNRequestStorage
 from ftw.saml2auth.interfaces import IIdentityProviderSettings
 from ftw.saml2auth.interfaces import IServiceProviderSettings
@@ -104,7 +105,13 @@ class Saml2View(BrowserView):
         if self.party == 'idp':
             return self.process_saml_request()
         elif self.party == 'sp':
-            return self.process_saml_response()
+            try:
+                return self.process_saml_response()
+            except SAMLResponseError as exc:
+                response = self.request.response
+                response.setHeader('Content-Type', 'text/plain')
+                response.setStatus(400, lock=1)
+                response.setBody(exc.message, lock=1)
 
     def extract_authn_request(self):
         """Extract AuthNRequest and RelayState from the HTTP request or cookie.
@@ -238,14 +245,15 @@ class Saml2View(BrowserView):
         """Extract the SAML response from the request and authenticate the
            user.
         """
+
         if 'SAMLResponse' not in self.request.form:
-            raise BadRequest('Missing SAMLResponse')
+            raise SAMLResponseError('Missing SAMLResponse')
 
         doc = self.request.form['SAMLResponse']
         try:
             doc = base64.b64decode(doc)
         except TypeError:
-            raise BadRequest('Undecodable SAMLResponse')
+            raise SAMLResponseError('Undecodable SAMLResponse')
 
         settings = self.sp_settings()
         sign_context = SignatureContext()
@@ -255,10 +263,10 @@ class Saml2View(BrowserView):
         try:
             resp = CreateFromDocument(doc, context=sign_context)
         except BadDocumentError, e:
-            raise BadRequest('Invalid SAMLResponse')
+            raise SAMLResponseError('Invalid SAMLResponse')
         except VerifyError, e:
             logger.warning('Signature verification error: %s' % str(e))
-            raise BadRequest('Invalid Signature')
+            raise SAMLResponseError('Invalid Signature')
 
         portal_state = getMultiAdapter(
             (self.context, self.request), name=u'plone_portal_state')
@@ -267,14 +275,14 @@ class Saml2View(BrowserView):
         issued_requests = IAuthNRequestStorage(portal_state.portal())
         url = issued_requests.pop(resp.InResponseTo)
         if not url:
-            raise BadRequest('Unknown SAMLResponse')
+            raise SAMLResponseError('Unknown SAMLResponse')
 
         # Verify destination of SAML response
         sp_url = '{}/saml2/sp/sso'.format(portal_state.portal_url())
         if resp.Destination != sp_url:
             logger.warning('Wrong destination in SAML response. Got %s, '
                            'expected %s' % (resp.Destination, sp_url))
-            raise BadRequest('Wrong destination')
+            raise SAMLResponseError('Wrong destination')
 
         # Verify that response has status success.
         status = resp.Status.StatusCode.Value
@@ -285,7 +293,7 @@ class Saml2View(BrowserView):
 
             logger.warning('Failed SAML2 request with status code: %s.'
                            % status)
-            raise BadRequest('Wrong status')
+            raise SAMLResponseError('Wrong status')
 
         # Verfiy issue time of response.
         now = datetime.utcnow()
@@ -294,13 +302,13 @@ class Saml2View(BrowserView):
         delta = timedelta(seconds=settings.max_clock_skew)
         if (now + delta) < issue_instant or (now - delta) > issue_instant:
             logger.warning('Clock skew too great.')
-            raise BadRequest()
+            raise SAMLResponseError('Clock skew too great')
 
         # We expect the subject and attributes in the first assertion
         if len(resp.Assertion) > 0:
             assertion = resp.Assertion[0]
             if not assertion.verified_signature():
-                raise BadRequest('Unsigned Assertion')
+                raise SAMLResponseError('Unsigned Assertion')
             subject = assertion.Subject.NameID.value().encode('utf8')
             attributes = extract_attributes(assertion)
             self.login_user(subject, attributes)
@@ -308,7 +316,7 @@ class Saml2View(BrowserView):
             return
         else:
             logger.warning('Missing assertion')
-            raise BadRequest('Missing assertion')
+            raise SAMLResponseError('Missing assertion')
 
     def login_user(self, userid, properties):
         uf = getToolByName(self.context, 'acl_users')
