@@ -1,44 +1,40 @@
-from Acquisition import aq_inner
 from AccessControl import Unauthorized
 from DateTime import DateTime
 from Products.CMFCore.utils import getToolByName
 from Products.Five import BrowserView
-from Products.PluggableAuthService.interfaces.plugins import IExtractionPlugin
-from base64 import b64encode
-from lxml.etree import fromstring, tostring, XMLParser, XML
-from netaddr import AddrFormatError
-from netaddr import IPAddress
-from netaddr import IPSet
-from tempfile import NamedTemporaryFile
-from zope.publisher.interfaces import IPublishTraverse
-from zope.publisher.interfaces import NotFound
-from zope.interface import implements
-from zExceptions import NotFound as zNotFound
-from zExceptions import BadRequest
-from dm.saml2.pyxb.protocol import CreateFromDocument
-from dm.saml2.signature import SignatureContext, VerifyError
-from dm.saml2.pyxb.protocol import Response
-from dm.saml2.pyxb import protocol as samlp
-from dm.saml2.pyxb import assertion as saml
 from Products.Five.browser.pagetemplatefile import ViewPageTemplateFile
-from pyxb.utils.domutils import BindingDOMSupport
-from plone.registry.interfaces import IRegistry
+from Products.PlonePAS.events import UserInitialLoginInEvent
+from Products.PlonePAS.events import UserLoggedInEvent
+from Products.PluggableAuthService.interfaces.plugins import IUserEnumerationPlugin
+from datetime import datetime, timedelta
+from dm.saml2.pyxb import assertion as saml
+from dm.saml2.pyxb import protocol as samlp
+from dm.saml2.pyxb.protocol import CreateFromDocument
+from dm.saml2.pyxb.protocol import Response
+from dm.saml2.signature import SignatureContext, VerifyError
+from dm.saml2.util import xs_convert_from_xml
+from ftw.saml2auth.config import STATUS_SUCCESS
+from ftw.saml2auth.interfaces import IAuthNRequestStorage
 from ftw.saml2auth.interfaces import IIdentityProviderSettings
 from ftw.saml2auth.interfaces import IServiceProviderSettings
-from zope.component import queryUtility
-from pyxb.bundles.wssplat import ds
-from ftw.saml2auth.config import STATUS_SUCCESS
-from datetime import datetime, timedelta
-from dm.saml2.util import xs_convert_from_xml
-from zope.component import getMultiAdapter
+from plone.registry.interfaces import IRegistry
 from pyxb import BadDocumentError
+from pyxb.bundles.wssplat import ds
+from pyxb.utils.domutils import BindingDOMSupport
+from zExceptions import BadRequest
+from zExceptions import NotFound as zNotFound
+from zope import event
+from zope.component import getMultiAdapter
+from zope.component import queryUtility
+from zope.interface import implements
+from zope.publisher.interfaces import IPublishTraverse
+from zope.publisher.interfaces import NotFound
 
 import base64
 import dm.xmlsec.binding as xmlsec
-import uuid
-import zlib
 import logging
 import pytz
+import zlib
 
 COOKIE_NAME = '_ftwsaml2auth'
 
@@ -85,27 +81,6 @@ class Saml2View(BrowserView):
         self.party = None
         self.service = None
         self.mtool = getToolByName(self.context, 'portal_membership')
-        # self.plugin = None
-
-        # acl_users = getToolByName(self, "acl_users")
-        # plugins = acl_users._getOb('plugins')
-        # extractors = plugins.listPlugins(IExtractionPlugin)
-        # for extractor_id, extractor in extractors:
-        #     if extractor.meta_type == "Saml2 Web SSO plugin":
-        #         self.plugin = extractor
-        #         break
-
-        # self.is_internal_request = False
-        # if self.plugin is not None:
-        #     try:
-        #         ipset = IPSet(self.plugin.internal_network.split(','))
-        #     except AddrFormatError:
-        #         ipset = IPSet()
-        #     try:
-        #         ip = IPAddress(self.request.getClientAddr())
-        #     except AddrFormatError:
-        #         ip = IPAddress('127.0.0.1')
-        #     self.is_internal_request = ip in ipset
 
     def publishTraverse(self, request, name):
         # URL routing for SAML2 endpoints
@@ -285,15 +260,23 @@ class Saml2View(BrowserView):
             logger.warning('Signature verification error: %s' % str(e))
             raise BadRequest('Invalid Signature')
 
-        # Verify destination of SAML response
         portal_state = getMultiAdapter(
             (self.context, self.request), name=u'plone_portal_state')
+
+        # Verify InResponseTo attribute and get asscoiated url to redirect to
+        issued_requests = IAuthNRequestStorage(portal_state.portal())
+        url = issued_requests.pop(resp.InResponseTo)
+        if not url:
+            raise BadRequest('Unknown SAMLResponse')
+
+        # Verify destination of SAML response
         sp_url = '{}/saml2/sp/sso'.format(portal_state.portal_url())
         if resp.Destination != sp_url:
             logger.warning('Wrong destination in SAML response. Got %s, '
                            'expected %s' % (resp.Destination, sp_url))
             raise BadRequest('Wrong destination')
 
+        # Verify that response has status success.
         status = resp.Status.StatusCode.Value
         if status != STATUS_SUCCESS:
             # Status code may contain a second-level status code.
@@ -302,7 +285,7 @@ class Saml2View(BrowserView):
 
             logger.warning('Failed SAML2 request with status code: %s.'
                            % status)
-            raise Unauthorized()
+            raise BadRequest('Wrong status')
 
         # Verfiy issue time of response.
         now = datetime.utcnow()
@@ -311,7 +294,7 @@ class Saml2View(BrowserView):
         delta = timedelta(seconds=settings.max_clock_skew)
         if (now + delta) < issue_instant or (now - delta) > issue_instant:
             logger.warning('Clock skew too great.')
-            raise Unauthorized()
+            raise BadRequest()
 
         # We expect the subject and attributes in the first assertion
         if len(resp.Assertion) > 0:
@@ -320,46 +303,66 @@ class Saml2View(BrowserView):
                 raise BadRequest('Unsigned Assertion')
             subject = assertion.Subject.NameID.value().encode('utf8')
             attributes = extract_attributes(assertion)
-            return "subject: %s; attributes: %s" % (subject, attributes)
-            #self._logins.insert(subject)
+            self.login_user(subject, attributes)
+            self.request.response.redirect('%s' % url)
+            return
         else:
             logger.warning('Missing assertion')
-            raise Unauthorized()
-        return "Process SAML 2 repsonse"
+            raise BadRequest('Missing assertion')
 
-    def authn_request(self):
-        """Build an AuthNRequest."""
-        registry = queryUtility(IRegistry)
-        settings = registry.forInterface(IServiceProviderSettings)
+    def login_user(self, userid, properties):
+        uf = getToolByName(self.context, 'acl_users')
+        mtool = getToolByName(self, 'portal_membership')
+        member = mtool.getMemberById(userid)
 
-        portal = getToolByName(self.context, 'portal_url').getPortalObject()
-        acs_url = u'%s/saml2/sp/sso' % portal.absolute_url().decode('utf8')
+        settings = self.sp_settings()
+        if member is None and settings.autoprovision_users:
+            plugins = uf._getOb('plugins')
+            enumerators = plugins.listPlugins(IUserEnumerationPlugin)
+            plugin = None
+            for id_, enumerator in enumerators:
+                if enumerator.meta_type == "ftw.saml2auth plugin":
+                    plugin = enumerator
+                    break
+            if plugin is None:
+                logger.warning(
+                    'Missing PAS plugin. Cannot autoprovision user %s.' % userid)
+                return
 
-        req = samlp.AuthnRequest(
-            Destination=settings.idp_url,
-            ProtocolBinding=u'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST',
-            AssertionConsumerServiceURL=acs_url
-        )
-        req.Issuer = saml.Issuer(settings.sp_issuer_id)
-        req.NameIDPolicy = samlp.NameIDPolicy(
-            Format=settings.nameid_format,
-        )
-        req.RequestedAuthnContext = samlp.RequestedAuthnContext(
-            saml.AuthnContextClassRef(settings.authn_context),
-            Comparison="exact")
+            plugin.addUser(userid)
+            member = mtool.getMemberById(userid)
 
-        if settings.sign_authnrequest:
-            sign_context = SignatureContext()
-            key = xmlsec.Key.loadMemory(
-                settings.signing_key, xmlsec.KeyDataFormatPem, None)
-            sign_context.add_key(key, settings.sp_issuer_id)
-            req.request_signature(context=sign_context)
+        # Setup session
+        uf.updateCredentials(
+            self.request, self.request.response, userid, '')
 
-        return req.toxml()
+        # Update login times and other member properties
+        first_login = False
+        default = DateTime('2000/01/01')
+        login_time = member.getProperty('login_time', default)
+        if login_time == default:
+            first_login = True
+            login_time = DateTime()
+        member.setMemberProperties(dict(
+            login_time=mtool.ZopeTime(),
+            last_login_time=login_time,
+            **properties
+        ))
+
+        # Fire login event
+        user = member.getUser()
+        if first_login:
+            event.notify(UserInitialLoginInEvent(user))
+        else:
+            event.notify(UserLoggedInEvent(user))
+
+        # Expire the clipboard
+        if self.request.get('__cp', None) is not None:
+            self.request.response.expireCookie('__cp', path='/')
+
+        # Create member area
+        mtool.createMemberArea(member_id=userid)
 
     def sp_settings(self):
         registry = queryUtility(IRegistry)
         return registry.forInterface(IServiceProviderSettings)
-
-    def saml2_response(self):
-        """Build a SAML2 response."""

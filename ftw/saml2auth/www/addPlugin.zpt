@@ -3,18 +3,18 @@
   <body>
     <h1 tal:replace="structure here/manage_page_header">Header</h1>
 
-    <h2 tal:define="form_title string:SAML 2 Web SSO Authentication Plugin"
+    <h2 tal:define="form_title string:SAML 2 Web SSO Plugin"
         tal:replace="structure here/manage_form_title">Form Title</h2>
 
     <p class="form-help">
       Authenticates users who's login name is stored in a request header by a trusted proxy.
     </p>
 
-    <form action="addSaml2WebSSOPlugin" method="post">
+    <form action="addSAML2Plugin" method="post">
       <table>
         <tr>
           <td class="form-label">Id</td>
-          <td><input type="text" name="id_" tal:attributes="value request/id|string:saml2_websso"/></td>
+          <td><input type="text" name="id_" tal:attributes="value request/id|string:saml2"/></td>
         </tr>
         <tr>
           <td class="form-label">Title</td>

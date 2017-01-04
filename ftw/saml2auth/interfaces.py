@@ -54,9 +54,22 @@ class IServiceProviderSettings(Interface):
     )
 
     authn_context = schema.Choice(
-        title=u'NameID Format',
+        title=u'AuthN Context',
         vocabulary=authn_context_classes,
         default=u'urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport',
+    )
+
+    internal_authn_context = schema.Choice(
+        title=u'Internal AuthN Context',
+        vocabulary=authn_context_classes,
+        default=u'urn:federation:authentication:windows',
+    )
+
+    internal_network = schema.TextLine(
+        title=u'Internal Network',
+        description=u'List of ip addresses (e.g. 192.168.0.0/16,10.0.0.0/16)',
+        default=u'',
+        required=False,
     )
 
     nameid_format = schema.Choice(
@@ -74,12 +87,14 @@ class IServiceProviderSettings(Interface):
     signing_key = schema.Text(
         title=u'Signing Key',
         description=u'The private key used for signing AuthNRequests',
+        required=False,
     )
 
     signing_cert = schema.Text(
         title=u'Signing Certificate',
         description=u'The certificate for verifying signatures in '
                     'AuthNRequests',
+        required=False,
     )
 
     idp_cert = schema.Text(
@@ -92,6 +107,12 @@ class IServiceProviderSettings(Interface):
         title=u'Max. Clock Skew',
         description=u'The maximum acceptable clock skew in seconds.',
         default=60,
+    )
+
+    autoprovision_users = schema.Bool(
+        title=u'Autoprovision Users',
+        description=u"If enabled, users will be created if they don't exist",
+        default=False,
     )
 
 
@@ -129,3 +150,7 @@ class IIdentityProviderSettings(Interface):
         title=u'IdP Encryption Certificate',
         description=u'',
     )
+
+
+class IAuthNRequestStorage(Interface):
+    """Storage for issued AuthNRequest IDs"""

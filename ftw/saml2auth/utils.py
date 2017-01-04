@@ -74,3 +74,30 @@ def create_saml_response(in_response_to, destination, issuer_id, subject,
         assertion.request_signature(context=sign_context)
 
     return resp.toxml()
+
+
+def create_authn_request(idp_url, acs_url, issuer_id, nameid_format,
+                         authn_context, signing_key=''):
+    """Construct an AuthNRequest."""
+
+    req = samlp.AuthnRequest(
+        Destination=idp_url,
+        ProtocolBinding=u'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST',
+        AssertionConsumerServiceURL=acs_url,
+        )
+
+    req.Issuer = saml.Issuer(issuer_id)
+    req.NameIDPolicy = samlp.NameIDPolicy(
+        Format=nameid_format,
+    )
+    req.RequestedAuthnContext = samlp.RequestedAuthnContext(
+        saml.AuthnContextClassRef(authn_context),
+        Comparison="exact")
+
+    if signing_key:
+        sign_context = SignatureContext()
+        key = xmlsec.Key.loadMemory(signing_key, xmlsec.KeyDataFormatPem, None)
+        sign_context.add_key(key, issuer_id)
+        req.request_signature(context=sign_context)
+
+    return req
