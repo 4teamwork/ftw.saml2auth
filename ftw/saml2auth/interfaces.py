@@ -9,6 +9,24 @@ authn_context_classes = SimpleVocabulary([
     SimpleTerm(
         value=u'urn:federation:authentication:windows',
         title=u'Integrated Windows Authentication'),
+    SimpleTerm(
+        value=u'urn:oasis:names:tc:SAML:2.0:ac:classes:Kerberos',
+        title=u'Kerberos'),
+])
+
+authn_context_comparison_methods = SimpleVocabulary([
+    SimpleTerm(
+        value=u'exact',
+        title=u'Exact'),
+    SimpleTerm(
+        value=u'minimum',
+        title=u'Minimum'),
+    SimpleTerm(
+        value=u'maximum',
+        title=u'Maximum'),
+    SimpleTerm(
+        value=u'better',
+        title=u'Better'),
 ])
 
 nameid_formats = SimpleVocabulary([
@@ -53,17 +71,27 @@ class IServiceProviderSettings(Interface):
         default=u'',
     )
 
-    authn_context = schema.Choice(
+    authn_context = schema.List(
         title=u'AuthN Context',
-        vocabulary=authn_context_classes,
-        default=u'urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport',
+        value_type=schema.Choice(vocabulary=authn_context_classes),
+        default=[
+            u'urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport',
+            u'urn:federation:authentication:windows',
+            u'urn:oasis:names:tc:SAML:2.0:ac:classes:Kerberos',
+        ],
     )
 
-    internal_authn_context = schema.Choice(
-        title=u'Internal AuthN Context',
-        vocabulary=authn_context_classes,
-        default=u'urn:federation:authentication:windows',
+    authn_context_comparison = schema.Choice(
+        title=u'AuthN Context Comparison',
+        vocabulary=authn_context_comparison_methods,
+        default=u'exact',
     )
+
+    # internal_authn_context = schema.Choice(
+    #     title=u'Internal AuthN Context',
+    #     vocabulary=authn_context_classes,
+    #     default=u'urn:federation:authentication:windows',
+    # )
 
     internal_network = schema.TextLine(
         title=u'Internal Network',

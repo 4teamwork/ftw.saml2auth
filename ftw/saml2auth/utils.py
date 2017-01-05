@@ -77,7 +77,8 @@ def create_saml_response(in_response_to, destination, issuer_id, subject,
 
 
 def create_authn_request(idp_url, acs_url, issuer_id, nameid_format,
-                         authn_context, signing_key=''):
+                         authn_context, authn_context_comparison=u'exact',
+                         signing_key=''):
     """Construct an AuthNRequest."""
 
     req = samlp.AuthnRequest(
@@ -90,8 +91,9 @@ def create_authn_request(idp_url, acs_url, issuer_id, nameid_format,
     req.NameIDPolicy = samlp.NameIDPolicy(
         Format=nameid_format,
     )
+    auth_context_class_refs = [saml.AuthnContextClassRef(c) for c in authn_context]
     req.RequestedAuthnContext = samlp.RequestedAuthnContext(
-        saml.AuthnContextClassRef(authn_context),
+        *auth_context_class_refs,
         Comparison="exact")
 
     if signing_key:

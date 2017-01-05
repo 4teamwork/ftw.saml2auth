@@ -46,20 +46,20 @@ class SAML2SSOAutoSubmitViewlet(ViewletBase):
                 current_url.endswith('/login')):
             return ''
 
-        # Internal or external AuthN context?
-        ips = settings.internal_network or ''
-        try:
-            ipset = IPSet(ips.split(','))
-        except AddrFormatError:
-            ipset = IPSet()
-        try:
-            ip = IPAddress(self.request.getClientAddr())
-        except AddrFormatError:
-            ip = IPAddress('127.0.0.1')
-        if ip in ipset:
-            authn_context = settings.internal_authn_context
-        else:
-            authn_context = settings.authn_context
+        # # Internal or external AuthN context?
+        # ips = settings.internal_network or ''
+        # try:
+        #     ipset = IPSet(ips.split(','))
+        # except AddrFormatError:
+        #     ipset = IPSet()
+        # try:
+        #     ip = IPAddress(self.request.getClientAddr())
+        # except AddrFormatError:
+        #     ip = IPAddress('127.0.0.1')
+        # if ip in ipset:
+        #     authn_context = settings.internal_authn_context
+        # else:
+        #     authn_context = settings.authn_context
 
         # Create AuthNRequest
         req = create_authn_request(
@@ -67,7 +67,8 @@ class SAML2SSOAutoSubmitViewlet(ViewletBase):
             acs_url=acs_url,
             issuer_id=settings.sp_issuer_id,
             nameid_format=settings.nameid_format,
-            authn_context=authn_context,
+            authn_context=settings.authn_context,
+            authn_context_comparison=settings.authn_context_comparison,
             signing_key=settings.signing_key,
             )
 
