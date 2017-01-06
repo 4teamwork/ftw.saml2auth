@@ -87,7 +87,7 @@ FORM_TEMPLATE = """
         <meta charset="utf-8">
         <meta http-equiv="x-ua-compatible" content="ie=edge">
     </head>
-    <body onLoad="document.forms[0].submit();">
+    <body onLoad="document.forms[0].submit();" style="visibility: hidden;">
         <form action="{action}" method="POST">
             <input type="hidden" name="SAMLRequest" value="{authn_request}">
             <span>If you are not automaticallly redirected click</span>
