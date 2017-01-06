@@ -17,6 +17,13 @@ def initiate_saml2_protocol_exchange(event):
         return
 
     request = event.request
+    response = request.response
+
+    # Do not initiate for non-HTML content (e.g. ressources)
+    content_type = response.getHeader('Content-Type')
+    if not content_type or not content_type.startswith('text/html'):
+        return
+
     portal_state = queryMultiAdapter(
         (site, request), name=u'plone_portal_state')
 
