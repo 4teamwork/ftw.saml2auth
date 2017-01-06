@@ -13,6 +13,8 @@
   <adapter factory=".storage.AuthNRequestStorage"
            for="Products.CMFPlone.interfaces.siteroot.IPloneSiteRoot"/>
 
+  <subscriber handler=".subscribers.initiate_saml2_protocol_exchange" />
+
   <genericsetup:registerProfile
       name="default"
       title="ftw.saml2auth"
