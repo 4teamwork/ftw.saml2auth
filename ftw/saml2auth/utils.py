@@ -91,10 +91,11 @@ def create_authn_request(idp_url, acs_url, issuer_id, nameid_format,
     req.NameIDPolicy = samlp.NameIDPolicy(
         Format=nameid_format,
     )
-    auth_context_class_refs = [saml.AuthnContextClassRef(c) for c in authn_context]
-    req.RequestedAuthnContext = samlp.RequestedAuthnContext(
-        *auth_context_class_refs,
-        Comparison="exact")
+    if authn_context:
+        auth_context_class_refs = [saml.AuthnContextClassRef(c) for c in authn_context]
+        req.RequestedAuthnContext = samlp.RequestedAuthnContext(
+            *auth_context_class_refs,
+            Comparison="exact")
 
     if signing_key:
         sign_context = SignatureContext()
