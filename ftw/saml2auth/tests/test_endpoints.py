@@ -1,95 +1,17 @@
+from AccessControl import Unauthorized
 from ftw.saml2auth.browser.saml2 import Saml2View
+from ftw.saml2auth.errors import SAMLResponseError
 from ftw.saml2auth.interfaces import IServiceProviderSettings
 from ftw.saml2auth.testing import FTW_SAML2AUTH_INTEGRATION_TESTING
 from ftw.saml2auth.tests.utils import get_data
+from ftw.saml2auth.utils import create_saml_response
 from plone.app.testing import logout
 from plone.registry.interfaces import IRegistry
-from xml.etree.ElementTree import fromstring
 from zExceptions import BadRequest
-from AccessControl import Unauthorized
 from zope.component import queryUtility
-from ftw.saml2auth.utils import create_saml_response
+from ftw.saml2auth.interfaces import IAuthNRequestStorage
 import base64
 import unittest
-
-
-class TestAuthnRequest(unittest.TestCase):
-
-    layer = FTW_SAML2AUTH_INTEGRATION_TESTING
-
-    def setUp(self):
-        self.portal = self.layer['portal']
-        registry = queryUtility(IRegistry)
-        self.settings = registry.forInterface(IServiceProviderSettings)
-        self.settings.idp_url = u'https://idp.example.org/saml2/idp/sso'
-        self.settings.sp_issuer_id = u'https://sp.example.org/saml2/sp'
-
-    def authnrequest(self):
-        s2view = Saml2View(self.layer['portal'], self.layer['request'])
-        return fromstring(s2view.authn_request())
-
-    def test_authnrequest_attributes(self):
-        req = self.authnrequest()
-        self.assertEqual(u'http://nohost/plone/saml2/sp/sso',
-                         req.get('AssertionConsumerServiceURL'))
-        self.assertEqual(u'https://idp.example.org/saml2/idp/sso',
-                         req.get('Destination'))
-        self.assertEqual(u'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST',
-                         req.get('ProtocolBinding'))
-
-    def test_authnrequest_issuer(self):
-        req = self.authnrequest()
-        issuer = req.find(
-            '{urn:oasis:names:tc:SAML:2.0:assertion}Issuer').text
-        self.assertEqual('https://sp.example.org/saml2/sp',
-                         issuer)
-
-    def test_authnrequest_nameidpolicy(self):
-        req = self.authnrequest()
-        nameid_format = req.find(
-            '{urn:oasis:names:tc:SAML:2.0:protocol}NameIDPolicy').get('Format')
-        self.assertEqual(
-            'urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified',
-            nameid_format)
-
-        self.settings.nameid_format = u'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress'
-        req = self.authnrequest()
-        nameid_format = req.find(
-            '{urn:oasis:names:tc:SAML:2.0:protocol}NameIDPolicy').get('Format')
-        self.assertEqual(
-            'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
-            nameid_format)
-
-    def test_authnrequest_authn_context(self):
-        req = self.authnrequest()
-        authn_context = req.find(
-            '{urn:oasis:names:tc:SAML:2.0:protocol}RequestedAuthnContext').find(
-            '{urn:oasis:names:tc:SAML:2.0:assertion}AuthnContextClassRef').text
-        self.assertEqual(
-            'urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport',
-            authn_context)
-
-        self.settings.authn_context = u'urn:federation:authentication:windows'
-        req = self.authnrequest()
-        authn_context = req.find(
-            '{urn:oasis:names:tc:SAML:2.0:protocol}RequestedAuthnContext').find(
-            '{urn:oasis:names:tc:SAML:2.0:assertion}AuthnContextClassRef').text
-        self.assertEqual(
-            u'urn:federation:authentication:windows',
-            authn_context)
-
-    def test_signed_authnrequest_contains_signature(self):
-        self.settings.sign_authnrequest = True
-        self.settings.signing_key = get_data('signing.key').decode('utf8')
-        req = self.authnrequest()
-        self.assertIsNotNone(
-            req.find('{http://www.w3.org/2000/09/xmldsig#}Signature'))
-
-    def test_unsigned_authnrequest_doesnt_contain_signature(self):
-        self.settings.sign_authnrequest = False
-        req = self.authnrequest()
-        self.assertIsNone(
-            req.find('{http://www.w3.org/2000/09/xmldsig#}Signature'))
 
 
 class TestExtractAuthnRequest(unittest.TestCase):
@@ -191,28 +113,30 @@ class TestProcessSAMLResponse(unittest.TestCase):
         self.settings.idp_cert = get_data('signing.crt').decode('utf8')
         self.settings.idp_issuer_id = u'https://idp.example.com'
 
-    def test_request_without_saml_response_raises_400(self):
+    def test_request_without_saml_response_raises(self):
         s2view = Saml2View(self.portal, self.request)
-        with self.assertRaises(BadRequest) as cm:
+        with self.assertRaises(SAMLResponseError) as cm:
             s2view.process_saml_response()
         self.assertEqual('Missing SAMLResponse', cm.exception.message)
 
-    def test_undecodeable_saml_response_raises_400(self):
+    def test_undecodeable_saml_response_raises(self):
         self.request.form.update({'SAMLResponse': 'invalid'})
         s2view = Saml2View(self.portal, self.request)
-        with self.assertRaises(BadRequest) as cm:
+        with self.assertRaises(SAMLResponseError) as cm:
             s2view.process_saml_response()
         self.assertEqual('Undecodable SAMLResponse', cm.exception.message)
 
-    def test_invalid_saml_response_raises_400(self):
+    def test_invalid_saml_response_raises(self):
         self.request.form.update({
             'SAMLResponse': base64.b64encode('<response>invalid</response>')})
         s2view = Saml2View(self.portal, self.request)
-        with self.assertRaises(BadRequest) as cm:
+        with self.assertRaises(SAMLResponseError) as cm:
             s2view.process_saml_response()
         self.assertEqual('Invalid SAMLResponse', cm.exception.message)
 
-    def test_saml_response_without_signature_raises_400(self):
+    def test_saml_response_without_signature_raises(self):
+        issued_requests = IAuthNRequestStorage(self.portal)
+        issued_requests.add(u'_12345', u'https://test')
         resp = create_saml_response(
             in_response_to=u'_12345',
             destination=u'{}/saml2/sp/sso'.format(self.portal.absolute_url()),
@@ -224,11 +148,11 @@ class TestProcessSAMLResponse(unittest.TestCase):
         self.request.form.update({
             'SAMLResponse': base64.b64encode(resp)})
         s2view = Saml2View(self.portal, self.request)
-        with self.assertRaises(BadRequest) as cm:
+        with self.assertRaises(SAMLResponseError) as cm:
             s2view.process_saml_response()
         self.assertEqual('Unsigned Assertion', cm.exception.message)
 
-    def test_invalid_signature_raises_400(self):
+    def test_invalid_signature_raises(self):
         resp = create_saml_response(
             in_response_to=u'_12345',
             destination=u'{}/saml2/sp/sso'.format(self.portal.absolute_url()),
@@ -242,11 +166,30 @@ class TestProcessSAMLResponse(unittest.TestCase):
         self.request.form.update({
             'SAMLResponse': base64.b64encode(resp)})
         s2view = Saml2View(self.portal, self.request)
-        with self.assertRaises(BadRequest) as cm:
+        with self.assertRaises(SAMLResponseError) as cm:
             s2view.process_saml_response()
         self.assertEqual('Invalid Signature', cm.exception.message)
 
-    def test_wrong_destination_raises_400(self):
+    def test_unknown_in_repsonse_to_raises(self):
+        resp = create_saml_response(
+            in_response_to=u'_12345',
+            destination=u'{}/saml2/sp/sso'.format(self.portal.absolute_url()),
+            issuer_id=u'https://idp.example.com',
+            subject=u'john',
+            subject_format=u'urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified',
+            audience=u'https://sp.example.com',
+            key=get_data('signing.key'),
+        )
+        self.request.form.update({
+            'SAMLResponse': base64.b64encode(resp)})
+        s2view = Saml2View(self.portal, self.request)
+        with self.assertRaises(SAMLResponseError) as cm:
+            s2view.process_saml_response()
+        self.assertEqual('Unknown SAMLResponse', cm.exception.message)
+
+    def test_wrong_destination_raises(self):
+        issued_requests = IAuthNRequestStorage(self.portal)
+        issued_requests.add(u'_12345', u'https://test')
         resp = create_saml_response(
             in_response_to=u'_12345',
             destination=u'http://wrong.net',
@@ -259,6 +202,6 @@ class TestProcessSAMLResponse(unittest.TestCase):
         self.request.form.update({
             'SAMLResponse': base64.b64encode(resp)})
         s2view = Saml2View(self.portal, self.request)
-        with self.assertRaises(BadRequest) as cm:
+        with self.assertRaises(SAMLResponseError) as cm:
             s2view.process_saml_response()
         self.assertEqual('Wrong destination', cm.exception.message)
