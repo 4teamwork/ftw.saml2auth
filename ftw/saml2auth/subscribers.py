@@ -8,6 +8,7 @@ from zope.component import adapter
 from zope.component import queryMultiAdapter
 from zope.component import queryUtility
 from zope.component.hooks import getSite
+import urllib
 
 
 @adapter(IPubBeforeCommit)
@@ -44,8 +45,8 @@ def initiate_saml2_protocol_exchange(event):
 
     current_url = request['ACTUAL_URL']
     query_string = request['QUERY_STRING']
-    acs_url = u'{}/saml2/sp/sso'.format(
-        portal_state.portal_url().decode('utf8'))
+    portal_url = portal_state.portal_url()
+    acs_url = u'{}/saml2/sp/sso'.format(portal_url.decode('utf8'))
 
     # Do not initiate if calling our SAML2 endpoint
     if current_url == acs_url:
@@ -67,11 +68,18 @@ def initiate_saml2_protocol_exchange(event):
         signing_key=settings.signing_key,
         )
 
-    # Store id of AuthNRequest with current url.
-    issued_requests = IAuthNRequestStorage(site)
+    # Include query string in current url
     if query_string:
         current_url = '{}?{}'.format(current_url, query_string)
-    issued_requests.add(req.ID, current_url)
+
+    # Store id of AuthNRequest with current url.
+    if settings.store_requests:
+        issued_requests = IAuthNRequestStorage(site)
+        issued_requests.add(req.ID, current_url)
+        relay_state = ''
+    else:
+        # Store current url in RelayState
+        relay_state = urllib.quote(current_url[len(portal_url):])
 
     # Replace current response with a form containing a SAML2 authentication
     # request.
@@ -82,6 +90,7 @@ def initiate_saml2_protocol_exchange(event):
         ' '.join(FORM_TEMPLATE.format(
             action=settings.idp_url,
             authn_request=b64encode(req.toxml()),
+            relay_state=relay_state,
         ).split()))
     response.setHeader('Expires', 'Sat, 01 Jan 2000 00:00:00 GMT')
     response.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
@@ -97,6 +106,7 @@ FORM_TEMPLATE = """
     <body onLoad="document.forms[0].submit();" style="visibility: hidden;">
         <form action="{action}" method="POST">
             <input type="hidden" name="SAMLRequest" value="{authn_request}">
+            <input type="hidden" name="RelayState" value="{relay_state}">
             <span>If you are not automaticallly redirected click</span>
             <input type="submit" value="Continue">
         </form>

@@ -171,6 +171,7 @@ class TestProcessSAMLResponse(unittest.TestCase):
         self.assertEqual('Invalid Signature', cm.exception.message)
 
     def test_unknown_in_repsonse_to_raises(self):
+        self.settings.store_requests = True
         resp = create_saml_response(
             in_response_to=u'_12345',
             destination=u'{}/saml2/sp/sso'.format(self.portal.absolute_url()),

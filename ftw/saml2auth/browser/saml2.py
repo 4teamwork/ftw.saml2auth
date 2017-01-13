@@ -35,6 +35,7 @@ import base64
 import dm.xmlsec.binding as xmlsec
 import logging
 import pytz
+import urllib
 import zlib
 
 COOKIE_NAME = '_ftwsaml2auth'
@@ -270,12 +271,19 @@ class Saml2View(BrowserView):
 
         portal_state = getMultiAdapter(
             (self.context, self.request), name=u'plone_portal_state')
+        portal_url = portal_state.portal_url()
 
-        # Verify InResponseTo attribute and get asscoiated url to redirect to
-        issued_requests = IAuthNRequestStorage(portal_state.portal())
-        url = issued_requests.pop(resp.InResponseTo)
-        if not url:
-            raise SAMLResponseError('Unknown SAMLResponse')
+        if settings.store_requests:
+            # Verify InResponseTo attribute and get asscoiated url to redirect
+            # to
+            issued_requests = IAuthNRequestStorage(portal_state.portal())
+            url = issued_requests.pop(resp.InResponseTo)
+            if not url:
+                raise SAMLResponseError('Unknown SAMLResponse')
+        else:
+            # Get destination url from RelayState
+            url = portal_url + urllib.unquote(
+                self.request.form.get('RelayState', ''))
 
         # Verify destination of SAML response
         sp_url = '{}/saml2/sp/sso'.format(portal_state.portal_url())

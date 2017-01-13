@@ -79,25 +79,13 @@ class IServiceProviderSettings(Interface):
             u'urn:federation:authentication:windows',
             u'urn:oasis:names:tc:SAML:2.0:ac:classes:Kerberos',
         ],
+        required=False,
     )
 
     authn_context_comparison = schema.Choice(
         title=u'AuthN Context Comparison',
         vocabulary=authn_context_comparison_methods,
         default=u'exact',
-    )
-
-    # internal_authn_context = schema.Choice(
-    #     title=u'Internal AuthN Context',
-    #     vocabulary=authn_context_classes,
-    #     default=u'urn:federation:authentication:windows',
-    # )
-
-    internal_network = schema.TextLine(
-        title=u'Internal Network',
-        description=u'List of ip addresses (e.g. 192.168.0.0/16,10.0.0.0/16)',
-        default=u'',
-        required=False,
     )
 
     nameid_format = schema.Choice(
@@ -140,6 +128,13 @@ class IServiceProviderSettings(Interface):
     autoprovision_users = schema.Bool(
         title=u'Autoprovision Users',
         description=u"If enabled, users will be created if they don't exist",
+        default=False,
+    )
+
+    store_requests = schema.Bool(
+        title=u'Store Requests',
+        description=u"If enabled, the id of an AuthNRequest is stored and "
+                    "verified when processing a response.",
         default=False,
     )
 
