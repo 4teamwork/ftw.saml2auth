@@ -138,6 +138,13 @@ class IServiceProviderSettings(Interface):
         default=False,
     )
 
+    update_user_properties = schema.Bool(
+        title=u'Update User Properties',
+        description=u"If enabled, the user's properties are updated with the "
+                    "attributes contained in the SAML assertion.",
+        default=True,
+    )
+
 
 class IIdentityProviderSettings(Interface):
 

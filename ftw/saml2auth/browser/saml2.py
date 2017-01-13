@@ -318,7 +318,10 @@ class Saml2View(BrowserView):
             if not assertion.verified_signature():
                 raise SAMLResponseError('Unsigned Assertion')
             subject = assertion.Subject.NameID.value().encode('utf8')
-            attributes = extract_attributes(assertion)
+            if settings.update_user_properties:
+                attributes = extract_attributes(assertion)
+            else:
+                attributes = {}
             self.login_user(subject, attributes)
             self.request.response.redirect('%s' % url)
             return
