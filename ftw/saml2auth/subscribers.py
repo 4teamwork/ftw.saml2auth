@@ -1,14 +1,10 @@
-from ZPublisher.interfaces import IPubBeforeCommit
-from base64 import b64encode
-from ftw.saml2auth.interfaces import IAuthNRequestStorage
 from ftw.saml2auth.interfaces import IServiceProviderSettings
-from ftw.saml2auth.utils import create_authn_request
 from plone.registry.interfaces import IRegistry
 from zope.component import adapter
 from zope.component import queryMultiAdapter
 from zope.component import queryUtility
 from zope.component.hooks import getSite
-import urllib
+from ZPublisher.interfaces import IPubBeforeCommit
 
 
 @adapter(IPubBeforeCommit)
@@ -44,7 +40,6 @@ def initiate_saml2_protocol_exchange(event):
         return
 
     current_url = request['ACTUAL_URL']
-    query_string = request['QUERY_STRING']
     portal_url = portal_state.portal_url()
     acs_url = u'{}/saml2/sp/sso'.format(portal_url.decode('utf8'))
 
@@ -57,40 +52,18 @@ def initiate_saml2_protocol_exchange(event):
             current_url.endswith('/login')):
         return
 
-    # Create AuthNRequest
-    req = create_authn_request(
-        idp_url=settings.idp_url,
-        acs_url=acs_url,
-        issuer_id=settings.sp_issuer_id,
-        nameid_format=settings.nameid_format,
-        authn_context=settings.authn_context,
-        authn_context_comparison=settings.authn_context_comparison,
-        signing_key=settings.signing_key,
-        )
-
-    # Include query string in current url
-    if query_string:
-        current_url = '{}?{}'.format(current_url, query_string)
-
-    # Store id of AuthNRequest with current url.
-    if settings.store_requests:
-        issued_requests = IAuthNRequestStorage(site)
-        issued_requests.add(req.ID, current_url)
-        relay_state = ''
-    else:
-        # Store current url in RelayState
-        relay_state = urllib.quote(current_url[len(portal_url):])
-
     # Replace current response with a form containing a SAML2 authentication
     # request.
+    form_properties = queryMultiAdapter((site, request),
+                                        name='saml2_form_properties')()
     response = request.response
     response.headers = {}
     response.accumulated_headers = []
     response.setBody(
         ' '.join(FORM_TEMPLATE.format(
-            action=settings.idp_url,
-            authn_request=b64encode(req.toxml()),
-            relay_state=relay_state,
+            action=form_properties.get('action'),
+            authn_request=form_properties.get('authn_request'),
+            relay_state=form_properties.get('relay_state'),
         ).split()))
     response.setHeader('Expires', 'Sat, 01 Jan 2000 00:00:00 GMT')
     response.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
