@@ -5,6 +5,13 @@
   i18n_domain="ftw.saml2auth">
 
   <browser:page
+    for="Products.CMFPlone.interfaces.IPloneSiteRoot"
+    name="saml2_form_properties"
+    class=".saml2.Saml2FormProperties"
+    permission="zope.Public"
+    />
+
+  <browser:page
     for="plone.app.layout.navigation.interfaces.INavigationRoot"
     name="saml2"
     class=".saml2.Saml2View"

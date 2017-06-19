@@ -6,6 +6,7 @@ from Products.Five.browser.pagetemplatefile import ViewPageTemplateFile
 from Products.PlonePAS.events import UserInitialLoginInEvent
 from Products.PlonePAS.events import UserLoggedInEvent
 from Products.PluggableAuthService.interfaces.plugins import IUserEnumerationPlugin
+from base64 import b64encode
 from datetime import datetime, timedelta
 from dm.saml2.pyxb import assertion as saml
 from dm.saml2.pyxb import protocol as samlp
@@ -18,6 +19,9 @@ from ftw.saml2auth.errors import SAMLResponseError
 from ftw.saml2auth.interfaces import IAuthNRequestStorage
 from ftw.saml2auth.interfaces import IIdentityProviderSettings
 from ftw.saml2auth.interfaces import IServiceProviderSettings
+from ftw.saml2auth.utils import create_authn_request
+from plone import api
+from plone.memoize.instance import memoize
 from plone.registry.interfaces import IRegistry
 from pyxb import BadDocumentError
 from pyxb.bundles.wssplat import ds
@@ -67,6 +71,90 @@ def extract_attributes(assertion):
                 value = value.encode('utf8')
             attrs[key] = value
     return attrs
+
+
+class Saml2FormProperties(BrowserView):
+    """ Returns all properties required to create a saml-authentication-form.
+
+    Example usage:
+
+    <tal:saml define="portal context/@@plone_portal_state/portal;
+                      properties portal/@@saml2_form_properties;"
+              condition="properties/enabled">
+
+        <form id="login_form_internal"
+              tal:attributes="action properties/action"
+              method="POST">
+
+            <input type="hidden" name="SAMLRequest" value="properties/authn_request" />
+            <input type="hidden" name="RelayState" value="properties/relay_state" />
+            <input type="submit" name="submit" value="Log in"/>
+        </form>
+    </tal:saml>
+    """
+    def __init__(self, context, request):
+        super(Saml2FormProperties, self).__init__(context, request)
+        self.settings = queryUtility(IRegistry).forInterface(IServiceProviderSettings)
+        self.portal_url = api.portal.get().absolute_url()
+
+    def __call__(self):
+        return {
+            'enabled': self._is_enabled(),
+            'action': self._get_action(),
+            'authn_request': self._get_base64_encoded_authn_request(),
+            'relay_state': self._get_relay_state(),
+            }
+
+    def _is_enabled(self):
+        return self.settings.enabled
+
+    def _get_action(self):
+        return self.settings.idp_url
+
+    @memoize
+    def _get_authn_request(self):
+        if self._is_enabled():
+            return None
+
+        return create_authn_request(
+            idp_url=self.settings.idp_url,
+            acs_url=u'{}/saml2/sp/sso'.format(self.portal_url.decode('utf8')),
+            issuer_id=self.settings.sp_issuer_id,
+            nameid_format=self.settings.nameid_format,
+            authn_context=self.settings.authn_context,
+            authn_context_comparison=self.settings.authn_context_comparison,
+            signing_key=self.settings.signing_key,
+            )
+
+    def _get_base64_encoded_authn_request(self):
+        authn_request = self._get_authn_request()
+        if not authn_request:
+            return ''
+
+        return b64encode(authn_request.toxml())
+
+    def _get_relay_state(self):
+        authn_request = self._get_authn_request()
+        if not authn_request:
+            return ''
+
+        current_url = self.request['ACTUAL_URL']
+        query_string = self.request['QUERY_STRING']
+
+        # Include query string in current url
+        if query_string:
+            current_url = '{}?{}'.format(current_url, query_string)
+
+        # Store id of AuthNRequest with current url.
+        if self.settings.store_requests:
+            issued_requests = IAuthNRequestStorage(self.portal.get())
+            issued_requests.add(authn_request.ID, current_url)
+            relay_state = ''
+        else:
+            # Store current url in RelayState
+            relay_state = urllib.quote(current_url[len(self.portal_url):])
+
+        return relay_state
 
 
 class Saml2View(BrowserView):
