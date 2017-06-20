@@ -3,6 +3,7 @@
     xmlns:browser="http://namespaces.zope.org/browser"
     xmlns:five="http://namespaces.zope.org/five"
     xmlns:genericsetup="http://namespaces.zope.org/genericsetup"
+    xmlns:upgrade-step="http://namespaces.zope.org/ftw.upgrade"
     xmlns:i18n="http://namespaces.zope.org/i18n"
     i18n_domain="ftw.saml2auth">
 
@@ -21,6 +22,13 @@
       directory="profiles/default"
       description=""
       provides="Products.GenericSetup.interfaces.EXTENSION"
+      />
+
+  <include package="ftw.upgrade" file="meta.zcml" />
+
+  <upgrade-step:directory
+      profile="ftw.saml2auth:default"
+      directory="./upgrades"
       />
 
 </configure>
