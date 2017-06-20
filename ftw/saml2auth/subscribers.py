@@ -1,4 +1,6 @@
 from ftw.saml2auth.interfaces import IServiceProviderSettings
+from netaddr import IPAddress
+from netaddr import IPSet
 from plone.registry.interfaces import IRegistry
 from zope.component import adapter
 from zope.component import queryMultiAdapter
@@ -33,6 +35,12 @@ def initiate_saml2_protocol_exchange(event):
 
     # Do not initiate if SAML2 authentication is disabled.
     if not settings.enabled:
+        return
+
+    # Do not initiate if user accesses outside of the internal network
+    internal_network_ips = IPSet(settings.internal_network)
+    current_ip = IPAddress(request.getClientAddr())
+    if current_ip not in internal_network_ips:
         return
 
     # Do not initiate if coming from IdP to prevent endless loop
