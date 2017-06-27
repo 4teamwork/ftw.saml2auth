@@ -1,0 +1,3 @@
+<registry>
+    <records interface="ftw.saml2auth.interfaces.IServiceProviderSettings" />
+</registry>

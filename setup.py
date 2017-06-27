@@ -29,6 +29,8 @@ setup(name='ftw.saml2auth',
       zip_safe=False,
       install_requires=[
           'Plone',
+          'plone.api',
+          'ftw.upgrade',
           'setuptools',
           'netaddr',
           'dm.saml2',

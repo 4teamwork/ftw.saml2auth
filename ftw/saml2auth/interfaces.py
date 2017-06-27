@@ -145,6 +145,18 @@ class IServiceProviderSettings(Interface):
         default=True,
     )
 
+    internal_network = schema.Tuple(
+        title=u'Subnets or ip-addresses from the internal network',
+        description=u'Defines subnets (192.0.2.0/24) or ip-addresses (192.0.2.1) '
+                    u'to define your internal netzwork. A user accessing the '
+                    u'Plone Site from an internal network will be auto-logged-in. '
+                    u'Write each subnet/ip-address on a separate line.',
+        value_type=schema.TextLine(),
+        default=(),
+        missing_value=(),
+        required=False,
+    )
+
 
 class IIdentityProviderSettings(Interface):
 
