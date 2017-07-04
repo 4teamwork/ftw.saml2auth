@@ -140,27 +140,37 @@ class SAML2Plugin(BasePlugin):
     def enumerateUsers(self, id=None, login=None, exact_match=False,
                        sort_by=None, max_results=None, **kw):
 
-        # Only return a user if an id or a login was provided.
-        # We need this for updateCredentials of the default session plugin.
-
-        if id and login and id != login:
-            return None
-
-        if (id and not exact_match) or kw:
-            return None
-
         key = id and id or login
+        user_infos = []
+        pluginid = self.getId()
 
-        if key not in self._logins:
-            return None
+        # We do not provide search for additional keywords
+        if kw:
+            return ()
 
-        return [
-            {
+        if not key:
+            # Return all users
+            for login in self._logins:
+                user_infos.append({
+                    "id": login,
+                    "login": login,
+                    "pluginid": pluginid,
+                    })
+        elif key in self._logins:
+            # User does exists
+            user_infos.append({
                 "id": key,
                 "login": key,
-                "pluginid": self.getId(),
-            }
-        ]
+                "pluginid": pluginid,
+                })
+        else:
+            # User does not exists
+            return ()
+
+        if max_results is not None and max_results >= 0:
+            user_infos = user_infos[:max_results]
+
+        return tuple(user_infos)
 
     # IRolesPlugin
     def getRolesForPrincipal(self, principal, request=None):
