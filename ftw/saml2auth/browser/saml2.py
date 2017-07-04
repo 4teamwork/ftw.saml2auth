@@ -113,7 +113,7 @@ class Saml2FormProperties(BrowserView):
 
     @memoize
     def _get_authn_request(self):
-        if self._is_enabled():
+        if not self._is_enabled():
             return None
 
         return create_authn_request(
@@ -147,7 +147,7 @@ class Saml2FormProperties(BrowserView):
 
         # Store id of AuthNRequest with current url.
         if self.settings.store_requests:
-            issued_requests = IAuthNRequestStorage(self.portal.get())
+            issued_requests = IAuthNRequestStorage(api.portal.get())
             issued_requests.add(authn_request.ID, current_url)
             relay_state = ''
         else:
