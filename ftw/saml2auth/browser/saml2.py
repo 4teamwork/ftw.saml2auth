@@ -113,7 +113,7 @@ class Saml2FormProperties(BrowserView):
 
     @memoize
     def _get_authn_request(self):
-        if self._is_enabled():
+        if not self._is_enabled():
             return None
 
         return create_authn_request(
