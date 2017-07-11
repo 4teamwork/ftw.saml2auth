@@ -55,9 +55,12 @@ def initiate_saml2_protocol_exchange(event):
     if current_url == acs_url:
         return
 
-    # Allow logout and manual login
+    # Allow logout and manual login and reset password
     if (current_url.endswith('/logged_out') or
-            current_url.endswith('/login')):
+            current_url.endswith('/login') or
+            current_url.endswith('/mail_password_form') or
+            current_url.endswith('/mail_password') or
+            'portal_registration/' in current_url):
         return
 
     # Replace current response with a form containing a SAML2 authentication
