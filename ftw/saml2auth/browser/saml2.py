@@ -138,15 +138,7 @@ class Saml2FormProperties(BrowserView):
         if not authn_request:
             return ''
 
-        if 'came_from' in self.request.form:
-            current_url = self.request.form.get('came_from')
-        else:
-            current_url = self.request['ACTUAL_URL']
-            query_string = self.request['QUERY_STRING']
-
-            # Include query string in current url
-            if query_string:
-                current_url = '{}?{}'.format(current_url, query_string)
+        current_url = self._get_current_url()
 
         # Store id of AuthNRequest with current url.
         if self.settings.store_requests:
@@ -158,6 +150,23 @@ class Saml2FormProperties(BrowserView):
             relay_state = urllib.quote(current_url[len(self.portal_url):])
 
         return relay_state
+
+    def _get_current_url(self):
+        if 'came_from' in self.request.form:
+            return self.request.form.get('came_from')
+
+        current_url = self.request['ACTUAL_URL']
+
+        if current_url.split('/')[-1] in ['login', 'logged_out']:
+            return self.portal_url
+
+        query_string = self.request['QUERY_STRING']
+
+        # Include query string in current url
+        if query_string:
+            current_url = '{}?{}'.format(current_url, query_string)
+
+        return current_url
 
 
 class Saml2View(BrowserView):
