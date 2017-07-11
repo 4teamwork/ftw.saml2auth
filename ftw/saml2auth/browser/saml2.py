@@ -138,12 +138,15 @@ class Saml2FormProperties(BrowserView):
         if not authn_request:
             return ''
 
-        current_url = self.request['ACTUAL_URL']
-        query_string = self.request['QUERY_STRING']
+        if 'came_from' in self.request.form:
+            current_url = self.request.form.get('came_from')
+        else:
+            current_url = self.request['ACTUAL_URL']
+            query_string = self.request['QUERY_STRING']
 
-        # Include query string in current url
-        if query_string:
-            current_url = '{}?{}'.format(current_url, query_string)
+            # Include query string in current url
+            if query_string:
+                current_url = '{}?{}'.format(current_url, query_string)
 
         # Store id of AuthNRequest with current url.
         if self.settings.store_requests:
