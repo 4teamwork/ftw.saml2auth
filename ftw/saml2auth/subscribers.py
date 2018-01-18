@@ -31,7 +31,7 @@ def initiate_saml2_protocol_exchange(event):
         return
 
     registry = queryUtility(IRegistry)
-    settings = registry.forInterface(IServiceProviderSettings)
+    settings = registry.forInterface(IServiceProviderSettings, check=False)
 
     # Do not initiate if SAML2 authentication is disabled.
     if not settings.enabled:
