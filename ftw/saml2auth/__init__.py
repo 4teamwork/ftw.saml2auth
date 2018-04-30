@@ -8,10 +8,10 @@ def initialize(context):
     from AccessControl.Permissions import manage_users
     from ftw.saml2auth import plugin
 
-    registerMultiPlugin(plugin.Saml2WebSSOPlugin.meta_type)
+    registerMultiPlugin(plugin.SAML2Plugin.meta_type)
     context.registerClass(
-        plugin.Saml2WebSSOPlugin,
+        plugin.SAML2Plugin,
         permission=manage_users,
-        constructors=(plugin.manage_addSaml2WebSSOPlugin,
-                      plugin.addSaml2WebSSOPlugin),
+        constructors=(plugin.manage_addSAML2Plugin,
+                      plugin.addSAML2Plugin),
         visibility=None)

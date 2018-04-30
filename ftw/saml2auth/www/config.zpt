@@ -11,67 +11,11 @@
     <form action="manage_updateConfig" method="post">
       <table>
         <tr valign="top">
-          <td><div class="form-label">IdP URL</div>
-          <div class="form-help">e.g. https://adfs.domain.net/adfs/ls/</div>
-          </td>
-          <td><input type="text" name="idp_url"
-                     tal:attributes="value context/idp_url"/></td>
-        </tr>
-        <tr valign="top">
-          <td><div class="form-label">SP URL</div>
-          <div class="form-help">e.g. https://sp.domain.net/</div>
-          </td>
-          <td><input type="text" name="sp_url"
-                     tal:attributes="value context/sp_url"/></td>
-        </tr>
-        <tr valign="top">
-          <td><div class="form-label">Signing Certificate</div>
-          <div class="form-help">PEM-Format</div>
-          </td>
-          <td><textarea name="signing_cert" cols="65" rows="20"
-                        tal:content="context/signing_cert"></textarea></td>
-        </tr>
-        <tr valign="top">
-          <td><div class="form-label">IssuerID</div>
-          <div class="form-help">e.g. http://adfs.domain.net/adfs/services/trust</div>
-          </td>
-          <td><input type="text" name="issuer_id"
-                     tal:attributes="value context/issuer_id"/></td>
-        </tr>
-        <tr valign="top">
-          <td><div class="form-label">Clock Skew</div>
-          <div class="form-help"></div>
-          </td>
-          <td><input type="text" name="clock_skew"
-                     tal:attributes="value context/clock_skew"/></td>
-        </tr>
-        <tr valign="top">
           <td><div class="form-label">Roles</div>
           <div class="form-help"></div>
           </td>
-          <td><input type="text" name="roles"
+          <td><input type="text" name="roles" size="60"
                      tal:attributes="value context/roles"/></td>
-        </tr>
-        <tr valign="top">
-          <td><div class="form-label">AuthNContext</div>
-          <div class="form-help"></div>
-          </td>
-          <td><input type="text" name="authn_context"
-                     tal:attributes="value context/authn_context"/></td>
-        </tr>
-        <tr valign="top">
-          <td><div class="form-label">Internal Network</div>
-          <div class="form-help"></div>
-          </td>
-          <td><input type="text" name="internal_network"
-                     tal:attributes="value context/internal_network"/></td>
-        </tr>
-        <tr valign="top">
-          <td><div class="form-label">Internal AuthNContext</div>
-          <div class="form-help"></div>
-          </td>
-          <td><input type="text" name="internal_authn_context"
-                     tal:attributes="value context/internal_authn_context"/></td>
         </tr>
         <tr>
           <td colspan="2">

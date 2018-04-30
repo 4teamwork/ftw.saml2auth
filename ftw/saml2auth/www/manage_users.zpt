@@ -1,0 +1,88 @@
+<h1 tal:replace="structure here/manage_page_header">Header</h1>
+
+<h2 tal:define="form_title string:ZODB Users"
+    tal:replace="structure here/manage_tabs"> TABS </h2>
+
+<tal:block tal:define="adding request/adding | nothing;
+                       browsing python: not adding;
+                      ">
+
+<div tal:condition="browsing">
+
+  <h3> Current Users <a href="?adding=1">(Add a user)</a></h3>
+  <div>
+
+  <table width="100%" cellpadding="2" cellspacing="0">
+
+   <tr>
+    <th align="left" width="16px"></th>
+    <th align="left">User ID</th>
+    <th align="left">Login Name</th>
+   </tr>
+
+   <form action="." method="POST">
+   <input type="hidden" name="csrf_token"
+          tal:attributes="value context/@@csrf_token/token" />
+
+   <tr class="row-hilite"
+       tal:repeat="info here/listUserInfo"
+       tal:attributes="class python:repeat['info'].odd() and 'row-normal' or default"
+       >
+       <td>
+         <input type="checkbox" name="user_ids:list" value="USER_ID"
+         tal:attributes="value info/user_id" />
+       </td>
+      <td class="form-text" tal:content="info/user_id">USER_ID</td>
+      <td class="form-text" tal:content="info/login_name">LOGIN_NAME</td>
+   </tr>
+
+   <tr>
+     <td colspan="3">
+       <input type="hidden" name="user_ids:list:default" value="" />
+       <input type="submit" name="manage_removeUsers:method"
+       value=" Remove Users " />
+     </td>
+   </tr>
+
+   </form>
+  </table>
+
+  </div>
+</div>
+
+<div tal:condition="adding">
+
+  <h3> Add a User </h3>
+
+  <form action="manage_addUser" method="POST">
+    <input type="hidden" name="csrf_token"
+    tal:attributes="value context/@@csrf_token/token" />
+    <table
+    >
+
+    <tr valign="top">
+      <th align="right">
+        <div class="form-label">User ID:</div>
+      </th>
+      <td>
+        <input type="text" name="user_id" size="20" />
+      </td>
+    </tr>
+
+    <!-- <tbody metal:use-macro="here/manage_widgets/macros/authentication_widgets" /> -->
+
+    <tr valign="top">
+      <td />
+      <td>
+        <input type="submit" value=" Add User " />
+      </td>
+    </tr>
+
+  </table>
+</form>
+
+</div>
+</tal:block>
+
+<h1 tal:replace="structure here/manage_page_footer">Footer</h1>
+

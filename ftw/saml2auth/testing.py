@@ -1,10 +1,10 @@
 from plone.app.testing import PloneSandboxLayer
 from plone.app.testing import PLONE_FIXTURE
 from plone.app.testing import IntegrationTesting, FunctionalTesting
+from plone.app.testing import applyProfile
 from plone.testing import z2
 from zope.configuration import xmlconfig
-from ftw.saml2auth.plugin import Saml2WebSSOPlugin
-from ftw.saml2auth.tests.utils import get_data
+from ftw.saml2auth.plugin import SAML2Plugin
 
 
 class FtwSaml2authLayer(PloneSandboxLayer):
@@ -20,21 +20,17 @@ class FtwSaml2authLayer(PloneSandboxLayer):
         z2.installProduct(app, 'ftw.saml2auth')
 
     def setUpPloneSite(self, portal):
+        applyProfile(portal, 'ftw.saml2auth:default')
+
         # Setup PAS plugin
         uf = portal.acl_users
-        plugin = Saml2WebSSOPlugin('saml2_websso')
+        plugin = SAML2Plugin('saml2')
         uf._setObject(plugin.getId(), plugin)
-        plugin = uf['saml2_websso']
+        plugin = uf['saml2']
         plugin.manage_activateInterfaces([
-            'IAuthenticationPlugin',
-            'IExtractionPlugin',
             'IRolesPlugin',
             'IUserEnumerationPlugin',
         ])
-        plugin.idp_url = 'https://fs.domain.local/adfs/ls/'
-        plugin.sp_url = 'https://sp.domain.local'
-        plugin.issuer_id = 'http://fs.domain.local/adfs/services/trust'
-        plugin.signing_cert = get_data('signing.crt')
 
 
 FTW_SAML2AUTH_FIXTURE = FtwSaml2authLayer()

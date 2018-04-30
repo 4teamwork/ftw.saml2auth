@@ -2,17 +2,33 @@
     xmlns="http://namespaces.zope.org/zope"
     xmlns:browser="http://namespaces.zope.org/browser"
     xmlns:five="http://namespaces.zope.org/five"
+    xmlns:genericsetup="http://namespaces.zope.org/genericsetup"
+    xmlns:upgrade-step="http://namespaces.zope.org/ftw.upgrade"
     xmlns:i18n="http://namespaces.zope.org/i18n"
     i18n_domain="ftw.saml2auth">
 
   <five:registerPackage package="." initialize=".initialize" />
 
-        <browser:page
-            for="plone.app.layout.navigation.interfaces.INavigationRoot"
-            name="saml2"
-            class=".browser.Saml2View"
-            permission="zope.Public"
-            allowed_attributes="authn_request post_action auto_submit"
-            />
-  
+  <include package=".browser"/>
+
+  <adapter factory=".storage.AuthNRequestStorage"
+           for="Products.CMFPlone.interfaces.siteroot.IPloneSiteRoot"/>
+
+  <subscriber handler=".subscribers.initiate_saml2_protocol_exchange" />
+
+  <genericsetup:registerProfile
+      name="default"
+      title="ftw.saml2auth"
+      directory="profiles/default"
+      description=""
+      provides="Products.GenericSetup.interfaces.EXTENSION"
+      />
+
+  <include package="ftw.upgrade" file="meta.zcml" />
+
+  <upgrade-step:directory
+      profile="ftw.saml2auth:default"
+      directory="./upgrades"
+      />
+
 </configure>
