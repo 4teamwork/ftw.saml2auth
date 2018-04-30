@@ -1,7 +1,7 @@
 from BTrees.OOBTree import OOBTree
+from ftw.saml2auth.interfaces import IAuthNRequestStorage
 from zope.annotation.interfaces import IAnnotations
 from zope.interface import implements
-from ftw.saml2auth.interfaces import IAuthNRequestStorage
 import time
 
 ANNOTATION_KEY = 'ftw.saml2auth.requests'

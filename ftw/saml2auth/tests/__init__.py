@@ -1,10 +1,12 @@
 from ftw.saml2auth.interfaces import IServiceProviderSettings
 from ftw.saml2auth.testing import FTW_SAML2AUTH_INTEGRATION_TESTING
-from plone import api
+from ftw.saml2auth.tests.utils import get_data
+from plone.registry.interfaces import IRegistry
 from unittest import TestCase
+from zope.component import queryUtility
 
 
-class FunctionalTestCase(TestCase):
+class IntegrationTestCase(TestCase):
 
     layer = FTW_SAML2AUTH_INTEGRATION_TESTING
 
@@ -12,13 +14,17 @@ class FunctionalTestCase(TestCase):
         self.portal = self.layer['portal']
         self.request = self.layer['request']
 
-        # Enable the plugin by default
-        self.enable_plugin()
+        self.request.setServerURL(
+            protocol='https', hostname='sp.domain.local', port='443')
+        self.request.environ['HTTP_HOST'] = 'sp.domain.local'
+        self.request.environ['SERVER_PORT'] = '443'
 
-    def enable_plugin(self):
-        api.portal.set_registry_record(
-            'enabled', True, interface=IServiceProviderSettings)
-
-    def disable_plugin(self):
-        api.portal.set_registry_record(
-            'enabled', False, interface=IServiceProviderSettings)
+        # Configure SAML2 settings
+        registry = queryUtility(IRegistry)
+        self.settings = registry.forInterface(IServiceProviderSettings)
+        self.settings.idp_cert = get_data('signing.crt').decode('utf8')
+        self.settings.idp_issuer_id = u'http://fs.domain.local/adfs/services/trust'
+        self.settings.idp_url = u'https://fs.domain.local/adfs/ls'
+        self.settings.sp_issuer_id = u'https://sp.domain.local'
+        self.settings.autoprovision_users = True
+        self.settings.enabled = True

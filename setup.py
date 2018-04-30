@@ -5,6 +5,7 @@ version = '1.0'
 
 tests_require = [
     'plone.app.testing',
+    'freezegun',
 ]
 
 setup(name='ftw.saml2auth',
@@ -33,7 +34,7 @@ setup(name='ftw.saml2auth',
           'ftw.upgrade',
           'setuptools',
           'netaddr',
-          'dm.saml2',
+          'python-saml',
       ],
       tests_require=tests_require,
       extras_require={

@@ -158,41 +158,5 @@ class IServiceProviderSettings(Interface):
     )
 
 
-class IIdentityProviderSettings(Interface):
-
-    nameid_property = schema.TextLine(
-        title=u'NameID Attribute',
-        description=u'The member property used to identify the subject of a '
-                    'SAML assertion (e.g. id or email).',
-        default=u'id',
-    )
-
-    nameid_format = schema.Choice(
-        title=u'NameID Format',
-        vocabulary=nameid_formats,
-        default=u'urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified',
-    )
-
-    idp_signing_key = schema.Text(
-        title=u'IdP Siging Key',
-        description=u'',
-    )
-
-    idp_signing_cert = schema.Text(
-        title=u'IdP Signing Certificate',
-        description=u'',
-    )
-
-    idp_encryption_key = schema.Text(
-        title=u'IdP Encryption Key',
-        description=u'',
-    )
-
-    idp_encryption_cert = schema.Text(
-        title=u'IdP Encryption Certificate',
-        description=u'',
-    )
-
-
 class IAuthNRequestStorage(Interface):
     """Storage for issued AuthNRequest IDs"""

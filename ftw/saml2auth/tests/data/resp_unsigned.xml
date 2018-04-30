@@ -1,0 +1,42 @@
+<samlp:Response Consent="urn:oasis:names:tc:SAML:2.0:consent:unspecified" Destination="https://sp.domain.local" ID="_635ceead-eeb6-4eea-ba93-d54bbfdc78d7" InResponseTo="_f8a2c917-b885-44fe-a970-1f79f9db8819" IssueInstant="2015-02-12T15:33:56.860Z" Version="2.0" xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol">
+	<Issuer xmlns="urn:oasis:names:tc:SAML:2.0:assertion">http://fs.domain.local/adfs/services/trust</Issuer>
+	<samlp:Status>
+		<samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/>
+	</samlp:Status>
+	<Assertion ID="_25c43894-248a-4c4b-92b2-09e11fec1908" IssueInstant="2015-02-12T15:33:56.860Z" Version="2.0" xmlns="urn:oasis:names:tc:SAML:2.0:assertion">
+		<Issuer>http://fs.domain.local/adfs/services/trust</Issuer>
+		<Subject>
+			<NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">jim@domain.local</NameID>
+			<SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">
+				<SubjectConfirmationData InResponseTo="_f8a2c917-b885-44fe-a970-1f79f9db8819" NotOnOrAfter="2015-02-12T15:38:56.860Z" Recipient="https://sp.domain.local"/>
+			</SubjectConfirmation>
+		</Subject>
+		<Conditions NotBefore="2015-02-12T15:33:56.733Z" NotOnOrAfter="2015-02-12T16:33:56.733Z">
+			<AudienceRestriction>
+				<Audience>https://sp.domain.local</Audience>
+			</AudienceRestriction>
+		</Conditions>
+		<AttributeStatement>
+			<Attribute Name="windows_login">
+				<AttributeValue>jim</AttributeValue>
+			</Attribute>
+			<Attribute Name="fullname">
+				<AttributeValue>Jim Raynor</AttributeValue>
+			</Attribute>
+			<Attribute Name="email">
+				<AttributeValue>jim@domain.local</AttributeValue>
+			</Attribute>
+			<Attribute Name="firstname">
+				<AttributeValue>Jim</AttributeValue>
+			</Attribute>
+			<Attribute Name="lastname">
+				<AttributeValue>Raynor</AttributeValue>
+			</Attribute>
+		</AttributeStatement>
+		<AuthnStatement AuthnInstant="2015-02-12T15:12:05.015Z" SessionIndex="_25c43894-248a-4c4b-92b2-09e11fec1908">
+			<AuthnContext>
+				<AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport</AuthnContextClassRef>
+			</AuthnContext>
+		</AuthnStatement>
+	</Assertion>
+</samlp:Response>

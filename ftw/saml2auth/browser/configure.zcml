@@ -7,7 +7,7 @@
   <browser:page
     for="Products.CMFPlone.interfaces.IPloneSiteRoot"
     name="saml2_form_properties"
-    class=".saml2.Saml2FormProperties"
+    class=".properties.Saml2FormProperties"
     permission="zope.Public"
     />
 
