@@ -60,6 +60,8 @@ def initiate_saml2_protocol_exchange(event):
             current_url.endswith('/login') or
             current_url.endswith('/mail_password_form') or
             current_url.endswith('/mail_password') or
+            current_url.endswith('/pwreset_finish') or
+            'passwordreset/' in current_url or
             'portal_registration/' in current_url):
         return
 
