@@ -9,6 +9,10 @@ identity provider (IdP) supporting the SAML 2.0 Webbrowser SSO profile
 
 Currently only the POST binding is supported.
 
+Take note
+---------------
+xmlsec1-config needs to be patched on CentOS 7/RHEL 7 before building dm.xmlsec.binding. See https://github.com/4teamwork/ftw.saml2auth/issues/3
+
 
 AD FS 3.0 Setup
 ---------------
